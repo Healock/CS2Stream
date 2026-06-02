@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveDouyuStreamFromApiPayload } from "../src/platforms/douyu/stream.js";
+import { resolveDouyuRoomStream, resolveDouyuStreamFromApiPayload } from "../src/platforms/douyu/stream.js";
 
 describe("resolveDouyuStreamFromApiPayload", () => {
   it("returns a FLV candidate from a direct rtmp_url and rtmp_live payload", () => {
@@ -51,5 +51,41 @@ describe("resolveDouyuStreamFromApiPayload", () => {
     expect(resolveDouyuStreamFromApiPayload({ url: "https://example.com/live/STREAM.M3U8" })).toEqual([
       { url: "https://example.com/live/STREAM.M3U8", format: "hls" },
     ]);
+  });
+
+  it("resolves a room stream from captured getH5PlayV1 payload data", async () => {
+    await expect(
+      resolveDouyuRoomStream(
+        {
+          platform: "douyu",
+          roomId: "601514",
+          roomUrl: "https://www.douyu.com/601514",
+          label: "主舞台纯净流",
+        },
+        { auth: { source: "none" }, timeoutMs: 1000 },
+        {
+          captureStreamPayload: async () => ({
+            rtmp_url: "https://stream.example/live",
+            rtmp_live: "601514abc.flv",
+            rate: 0,
+          }),
+        }
+      )
+    ).resolves.toEqual([{ url: "https://stream.example/live/601514abc.flv", format: "flv", quality: "best" }]);
+  });
+
+  it("returns no room stream candidates when capture produces no payload", async () => {
+    await expect(
+      resolveDouyuRoomStream(
+        {
+          platform: "douyu",
+          roomId: "601514",
+          roomUrl: "https://www.douyu.com/601514",
+          label: "主舞台纯净流",
+        },
+        { auth: { source: "none" }, timeoutMs: 1000 },
+        { captureStreamPayload: async () => undefined }
+      )
+    ).resolves.toEqual([]);
   });
 });
