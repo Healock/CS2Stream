@@ -4,7 +4,7 @@
 
 Build a PotPlayer-oriented plugin package for Douyu CS2 events. The package discovers the rooms shown in the current Douyu CS2 event switch-room area, resolves each room to a real playable live stream URL, and hands a grouped playlist to PotPlayer.
 
-The default event anchor is Douyu room `601514`, currently used by `斗鱼CSGO赛事主频道`. The plugin targets CS2 only.
+The default event anchor is Douyu room `601514`, currently used by `斗鱼CSGO赛事主频道`. The first implementation targets Douyu CS2 only, but the resolver architecture must leave room for account verification and future platform adapters such as Huya and Bilibili.
 
 ## User-Facing Behavior
 
@@ -52,12 +52,37 @@ Responsibilities:
 Recommended modules:
 
 - `config`: anchor URL, output paths, quality preference, timeout, fallback options.
+- `auth`: optional account and cookie provider, initially used only when Douyu requires verification.
+- `platforms`: registry for stream platforms. Douyu is the only first-version adapter.
 - `douyu-page`: fetch page HTML and optionally render it with Playwright.
 - `switchroom-parser`: parse `wm-pc-switchroom` and extract `{ roomId, roomUrl, label }`.
 - `event-title`: derive the group title from `<title>`.
 - `douyu-stream-resolver`: resolve each roomId to a playable FLV/HLS URL.
 - `playlist-writer`: write PotPlayer-compatible DPL first, with M3U fallback if needed.
 - `cli`: command entry point used by PotPlayer.
+
+### Platform Adapter Interface
+
+The first version implements only the Douyu adapter, but the resolver should call platform-specific logic through a small interface:
+
+- `detect(input)`: decides whether a URL or room ID belongs to this platform.
+- `discoverEventRooms(anchor, context)`: returns displayed event rooms for an anchor.
+- `getEventTitle(anchor, context)`: returns the event/group title.
+- `resolveStream(room, context)`: returns one or more playable stream candidates.
+
+This keeps Huya and Bilibili future work additive. They should not require rewriting the PotPlayer extension, playlist writer, or CLI contract.
+
+### Authentication And Verification
+
+Some stream pages may require account cookies, anti-bot verification, or other request state. The first version should work without requiring a Douyu account where possible, but it must reserve a clear authentication path:
+
+- Configuration can point to a cookie file or exported browser cookie store.
+- The resolver passes an `authContext` to platform adapters.
+- The resolver never prints raw cookies, tokens, or account identifiers into normal logs.
+- If verification is required but credentials are unavailable or expired, the resolver returns a clear `auth_required` error.
+- Playwright fallback may reuse a configured browser profile only when explicitly enabled.
+
+Authentication is an extension point, not a first-version requirement unless live Douyu testing proves it is necessary.
 
 ## Discovery Strategy
 
@@ -89,6 +114,7 @@ The resolver should resolve all discovered rooms concurrently with a bounded lim
 Rules:
 
 - Prefer playable direct stream URLs that PotPlayer can open without browser cookies.
+- If a cookie-bound stream is the only available stream, mark the room as requiring authentication instead of silently returning a URL that PotPlayer cannot play.
 - Prefer configured quality where supported.
 - If a room fails resolution, record the failure and continue resolving other rooms.
 - If every room fails, return a failed result and do not claim success.
@@ -125,6 +151,7 @@ Expected failure cases:
 - Anchor page unreachable.
 - Anchor page title missing or changed.
 - `wm-pc-switchroom` missing.
+- Douyu account verification or cookie state required.
 - A room is offline.
 - Douyu changes stream signing logic.
 - PotPlayer cannot load the generated playlist format.
@@ -138,9 +165,11 @@ Minimum verification before declaring implementation complete:
 1. Unit test parser against the provided `wm-pc-switchroom` sample and assert all five room IDs and labels are extracted.
 2. Unit test title parsing with examples such as `科隆MAJOR_玩机器直播_玩机器丶Machine直播_玩机器CS2直播_玩机器斗鱼直播`.
 3. Unit test DPL writer output shape.
-4. Run the Node CLI against the default anchor URL.
-5. Confirm the generated playlist can be opened by PotPlayer on the target machine.
-6. If direct playlist grouping is not folder-like, verify the fallback title prefix behavior.
+4. Unit test platform adapter dispatch with a Douyu URL and an unsupported URL.
+5. Unit test auth-required error handling without exposing cookie values.
+6. Run the Node CLI against the default anchor URL.
+7. Confirm the generated playlist can be opened by PotPlayer on the target machine.
+8. If direct playlist grouping is not folder-like, verify the fallback title prefix behavior.
 
 ## Confidence And Loopholes
 
@@ -151,7 +180,9 @@ Remaining loopholes:
 - Douyu may change `wm-pc-switchroom` class names or move the room data into a different runtime structure.
 - Douyu real stream signing may change.
 - Room `601514` may stop being a reliable CS2 event anchor.
+- Douyu may require account verification or cookie-bound stream access.
 - PotPlayer DPL grouping behavior must be verified locally.
+- Huya and Bilibili have different discovery, signing, and authentication models; they are not in first-version scope.
 
 Mitigations:
 
@@ -159,3 +190,5 @@ Mitigations:
 - Keep stream signing logic isolated in one module.
 - Allow anchor URL override.
 - Include playlist format fallback.
+- Use a platform adapter interface so future Huya/Bilibili work is additive.
+- Reserve an auth provider without requiring credentials in first-version configuration.
