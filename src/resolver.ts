@@ -171,6 +171,11 @@ function collectRoomErrors(rooms: ResolvedRoom[]): ResolverError[] {
 async function mapWithConcurrency<T, U>(items: T[], limit: number, mapper: (item: T) => Promise<U>): Promise<U[]> {
   const results = new Array<U>(items.length);
   let nextIndex = 0;
+  const workerCount = Math.min(normalizedConcurrency(limit), items.length);
+
+  if (workerCount === 0) {
+    return [];
+  }
 
   async function worker(): Promise<void> {
     while (nextIndex < items.length) {
@@ -180,12 +185,12 @@ async function mapWithConcurrency<T, U>(items: T[], limit: number, mapper: (item
     }
   }
 
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()));
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
   return results;
 }
 
 function normalizedConcurrency(value: number): number {
-  return Math.max(1, Math.floor(value));
+  return Number.isFinite(value) && value >= 1 ? Math.floor(value) : 3;
 }
 
 function errorMessage(error: unknown): string {

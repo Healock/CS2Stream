@@ -16,8 +16,18 @@ export type ResolveFn = (options: RunResolverOptions) => Promise<ResolverResult>
 
 export async function runCli(argv: string[], io: CliIo, resolve = runResolver): Promise<number> {
   const program = new Command();
+  let capturedParseError = "";
 
   program
+    .exitOverride()
+    .configureOutput({
+      writeOut: (message) => {
+        io.stdout.write(message);
+      },
+      writeErr: (message) => {
+        capturedParseError += message;
+      },
+    })
     .option("-a, --anchor <url>", "Douyu anchor URL or room ID", "https://www.douyu.com/601514")
     .option("-o, --output-dir <path>", "Playlist output directory", "out")
     .option("--prefix-titles", "Prefix playlist item titles with the event title")
@@ -35,10 +45,15 @@ export async function runCli(argv: string[], io: CliIo, resolve = runResolver): 
   try {
     await program.parseAsync(argv);
   } catch (error) {
+    if (isHelpError(error)) {
+      return 0;
+    }
+
+    const message = capturedParseError.trim() || errorMessage(error);
     io.stdout.write(`${JSON.stringify({
       ok: false,
       rooms: [],
-      errors: [{ code: "network_error", message: errorMessage(error) }],
+      errors: [{ code: "network_error", message }],
     }, null, 2)}\n`);
     return 1;
   }
@@ -56,4 +71,8 @@ function isDirectExecution(): boolean {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function isHelpError(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "commander.helpDisplayed";
 }

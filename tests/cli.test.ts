@@ -65,4 +65,54 @@ describe("CLI defaults", () => {
     expect(json.ok).toBe(false);
     expect(json.errors).toContainEqual({ code: "network_error", message: "resolver exploded" });
   });
+
+  it("returns structured JSON for unknown options without calling resolver", async () => {
+    let called = false;
+    const output: string[] = [];
+    const fakeResolver: ResolveFn = async () => {
+      called = true;
+      return { ok: true, rooms: [], errors: [] };
+    };
+
+    const code = await runCli(["node", "cli.js", "--definitely-unknown"], { stdout: { write: (chunk: string) => output.push(chunk) } }, fakeResolver);
+    const json = JSON.parse(output.join(""));
+
+    expect(code).toBe(1);
+    expect(called).toBe(false);
+    expect(json.ok).toBe(false);
+    expect(json.errors[0]?.code).toBe("network_error");
+  });
+
+  it("returns structured JSON for missing option values without calling resolver", async () => {
+    let called = false;
+    const output: string[] = [];
+    const fakeResolver: ResolveFn = async () => {
+      called = true;
+      return { ok: true, rooms: [], errors: [] };
+    };
+
+    const code = await runCli(["node", "cli.js", "--anchor"], { stdout: { write: (chunk: string) => output.push(chunk) } }, fakeResolver);
+    const json = JSON.parse(output.join(""));
+
+    expect(code).toBe(1);
+    expect(called).toBe(false);
+    expect(json.ok).toBe(false);
+    expect(json.errors[0]?.code).toBe("network_error");
+  });
+
+  it("prints help without calling resolver", async () => {
+    let called = false;
+    const output: string[] = [];
+    const fakeResolver: ResolveFn = async () => {
+      called = true;
+      return { ok: true, rooms: [], errors: [] };
+    };
+
+    const code = await runCli(["node", "cli.js", "--help"], { stdout: { write: (chunk: string) => output.push(chunk) } }, fakeResolver);
+
+    expect(code).toBe(0);
+    expect(called).toBe(false);
+    expect(output.join("")).toContain("Usage:");
+    expect(() => JSON.parse(output.join(""))).toThrow();
+  });
 });

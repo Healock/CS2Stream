@@ -7,7 +7,7 @@ export interface ResolverConfig {
 }
 
 export function createDefaultConfig(overrides: Partial<ResolverConfig> = {}): ResolverConfig {
-  return {
+  const config = {
     anchor: "https://www.douyu.com/601514",
     outputDir: "out",
     timeoutMs: 15000,
@@ -15,4 +15,13 @@ export function createDefaultConfig(overrides: Partial<ResolverConfig> = {}): Re
     streamConcurrency: 3,
     ...overrides,
   };
+
+  return {
+    ...config,
+    streamConcurrency: normalizePositiveInteger(config.streamConcurrency, 3),
+  };
+}
+
+function normalizePositiveInteger(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 1 ? Math.floor(value) : fallback;
 }

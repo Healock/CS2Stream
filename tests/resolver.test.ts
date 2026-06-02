@@ -150,4 +150,68 @@ describe("runResolver", () => {
     expect(result.ok).toBe(true);
     expect(maxInFlight).toBeLessThanOrEqual(2);
   });
+
+  it("uses safe concurrency when streamConcurrency is NaN", async () => {
+    const result = await runResolver({
+      anchor: "https://www.douyu.com/601514",
+      outputDir: mkdtempSync(join(tmpdir(), "douyu-cs2-")),
+      streamConcurrency: Number.NaN,
+      adapters: [multiRoomAdapter()],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.rooms).toHaveLength(3);
+    expect(result.rooms.every((room) => room?.ok)).toBe(true);
+  });
+
+  it("uses safe concurrency when streamConcurrency is zero", async () => {
+    const result = await runResolver({
+      anchor: "https://www.douyu.com/601514",
+      outputDir: mkdtempSync(join(tmpdir(), "douyu-cs2-")),
+      streamConcurrency: 0,
+      adapters: [multiRoomAdapter()],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.rooms).toHaveLength(3);
+    expect(result.rooms.every((room) => room?.ok)).toBe(true);
+  });
+
+  it("uses safe concurrency when streamConcurrency is undefined", async () => {
+    const result = await runResolver({
+      anchor: "https://www.douyu.com/601514",
+      outputDir: mkdtempSync(join(tmpdir(), "douyu-cs2-")),
+      streamConcurrency: undefined,
+      adapters: [multiRoomAdapter()],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.rooms).toHaveLength(3);
+    expect(result.rooms.every((room) => room?.ok)).toBe(true);
+  });
+
+  it("uses safe concurrency when streamConcurrency is negative", async () => {
+    const result = await runResolver({
+      anchor: "https://www.douyu.com/601514",
+      outputDir: mkdtempSync(join(tmpdir(), "douyu-cs2-")),
+      streamConcurrency: -1,
+      adapters: [multiRoomAdapter()],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.rooms).toHaveLength(3);
+    expect(result.rooms.every((room) => room?.ok)).toBe(true);
+  });
 });
+
+function multiRoomAdapter(): PlatformAdapter {
+  return {
+    ...resolvingAdapter,
+    discoverEventRooms: async () => [
+      { platform: "douyu", roomId: "1", roomUrl: "https://www.douyu.com/1", label: "room 1" },
+      { platform: "douyu", roomId: "2", roomUrl: "https://www.douyu.com/2", label: "room 2" },
+      { platform: "douyu", roomId: "3", roomUrl: "https://www.douyu.com/3", label: "room 3" },
+    ],
+    resolveStream: async (room) => [{ url: `https://stream.example/${room.roomId}.flv`, format: "flv" }],
+  };
+}
