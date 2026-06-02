@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createDouyuAdapter } from "../src/platforms/douyu/adapter.js";
+import { createDouyuAdapter, normalizeDouyuAnchor } from "../src/platforms/douyu/adapter.js";
 import type { PlatformContext } from "../src/platforms/types.js";
 
 const context: PlatformContext = { auth: { source: "none" }, timeoutMs: 1000 };
@@ -11,6 +11,18 @@ describe("Douyu adapter", () => {
     expect(adapter.detect("https://www.douyu.com/601514")).toBe(true);
     expect(adapter.detect("601514")).toBe(true);
     expect(adapter.detect("https://example.com/601514")).toBe(false);
+    expect(adapter.detect("https://evil.example/?next=douyu.com")).toBe(false);
+    expect(adapter.detect("https://notdouyu.com/601514")).toBe(false);
+  });
+
+  it("normalizes only valid Douyu anchors", () => {
+    expect(normalizeDouyuAnchor("601514")).toBe("https://www.douyu.com/601514");
+    expect(normalizeDouyuAnchor("https://www.douyu.com/601514?dyshid=x")).toBe(
+      "https://www.douyu.com/601514?dyshid=x"
+    );
+    expect(() => normalizeDouyuAnchor("https://evil.example/?next=douyu.com")).toThrow(
+      /Invalid Douyu anchor host/
+    );
   });
 
   it("extracts title and switch-room rooms from fetched HTML", async () => {
