@@ -1,18 +1,20 @@
 import * as cheerio from "cheerio";
 import type { EventRoom, StreamCandidate } from "../../types.js";
 import type { PlatformAdapter, PlatformContext } from "../types.js";
-import { fetchDouyuHtml, normalizeDouyuFetchUrl } from "./page.js";
+import { fetchDouyuHtml, normalizeDouyuFetchUrl, renderDouyuHtml } from "./page.js";
 import { parseDouyuSwitchRooms } from "./switchroom.js";
 import { resolveDouyuRoomStream } from "./stream.js";
 import { parseDouyuEventTitle } from "./title.js";
 
 export interface DouyuAdapterDeps {
   fetchHtml?: (url: string, context: PlatformContext) => Promise<string>;
+  renderHtml?: (url: string, context: PlatformContext) => Promise<string>;
   resolveStream?: (room: EventRoom, context: PlatformContext) => Promise<StreamCandidate[]>;
 }
 
 export function createDouyuAdapter(deps: DouyuAdapterDeps = {}): PlatformAdapter {
   const fetchHtml = deps.fetchHtml ?? ((url, context) => fetchDouyuHtml(url, context.auth, context.timeoutMs));
+  const renderHtml = deps.renderHtml ?? ((url, context) => renderDouyuHtml(url, context.timeoutMs));
   const resolveStream = deps.resolveStream ?? resolveDouyuRoomStream;
 
   return {
@@ -31,8 +33,15 @@ export function createDouyuAdapter(deps: DouyuAdapterDeps = {}): PlatformAdapter
       return parseDouyuEventTitle($("title").first().text());
     },
     async discoverEventRooms(anchor: string, context: PlatformContext): Promise<EventRoom[]> {
-      const html = await fetchHtml(normalizeDouyuAnchor(anchor), context);
-      return parseDouyuSwitchRooms(html);
+      const normalizedAnchor = normalizeDouyuAnchor(anchor);
+      const html = await fetchHtml(normalizedAnchor, context);
+      const rooms = parseDouyuSwitchRooms(html);
+
+      if (rooms.length > 0) {
+        return rooms;
+      }
+
+      return parseDouyuSwitchRooms(await renderHtml(normalizedAnchor, context));
     },
     resolveStream,
   };

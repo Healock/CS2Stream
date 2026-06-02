@@ -55,4 +55,35 @@ describe("Douyu adapter", () => {
       },
     ]);
   });
+
+  it("uses rendered HTML fallback when fetched HTML has no switch-room rooms", async () => {
+    const fetchedHtml = `
+      <html>
+        <head><title>科隆MAJOR_斗鱼CSGO赛事主频道直播</title></head>
+        <body></body>
+      </html>`;
+    const renderedHtml = `
+      <html>
+        <body>
+          <div class="wm-pc-switchroom">
+            <a href="https://www.douyu.com/6979222">
+              <div class="wm-pc-room-button-text">玩机器</div>
+            </a>
+          </div>
+        </body>
+      </html>`;
+    const fetchHtml = vi.fn(async () => fetchedHtml);
+    const renderHtml = vi.fn(async () => renderedHtml);
+    const adapter = createDouyuAdapter({ fetchHtml, renderHtml });
+
+    await expect(adapter.discoverEventRooms("https://www.douyu.com/601514", context)).resolves.toEqual([
+      {
+        platform: "douyu",
+        roomId: "6979222",
+        roomUrl: "https://www.douyu.com/6979222",
+        label: "玩机器",
+      },
+    ]);
+    expect(renderHtml).toHaveBeenCalledWith("https://www.douyu.com/601514", context);
+  });
 });
