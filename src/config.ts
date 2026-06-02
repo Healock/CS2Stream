@@ -3,6 +3,7 @@ export interface ResolverConfig {
   outputDir: string;
   timeoutMs: number;
   prefixTitles: boolean;
+  streamConcurrency: number;
 }
 
 export function createDefaultConfig(overrides: Partial<ResolverConfig> = {}): ResolverConfig {
@@ -11,6 +12,7 @@ export function createDefaultConfig(overrides: Partial<ResolverConfig> = {}): Re
     outputDir: "out",
     timeoutMs: 15000,
     prefixTitles: false,
+    streamConcurrency: 3,
     ...overrides,
   };
 }

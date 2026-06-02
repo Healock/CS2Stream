@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync } from "node:fs";
+import { closeSync, mkdtempSync, openSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -51,5 +51,103 @@ describe("runResolver", () => {
 
     expect(result.ok).toBe(false);
     expect(result.errors[0]?.code).toBe("unsupported_platform");
+  });
+
+  it("returns a structured failure when event title lookup throws", async () => {
+    const result = await runResolver({
+      anchor: "https://www.douyu.com/601514",
+      adapters: [{ ...resolvingAdapter, getEventTitle: async () => { throw new Error("title fetch failed"); } }],
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.errors[0]).toMatchObject({ code: "anchor_unreachable", message: "title fetch failed" });
+  });
+
+  it("returns a structured failure when room discovery throws", async () => {
+    const result = await runResolver({
+      anchor: "https://www.douyu.com/601514",
+      adapters: [{ ...resolvingAdapter, discoverEventRooms: async () => { throw new Error("rooms fetch failed"); } }],
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.eventTitle).toBe("科隆MAJOR");
+    expect(result.errors[0]).toMatchObject({ code: "anchor_unreachable", message: "rooms fetch failed" });
+  });
+
+  it("marks a room failed when stream resolution throws and continues other rooms", async () => {
+    const outDir = mkdtempSync(join(tmpdir(), "douyu-cs2-"));
+    const adapter: PlatformAdapter = {
+      ...resolvingAdapter,
+      discoverEventRooms: async () => [
+        { platform: "douyu", roomId: "1", roomUrl: "https://www.douyu.com/1", label: "bad room" },
+        { platform: "douyu", roomId: "2", roomUrl: "https://www.douyu.com/2", label: "good room" },
+      ],
+      resolveStream: async (room) => {
+        if (room.roomId === "1") {
+          throw new Error("stream failed");
+        }
+
+        return [{ url: "https://stream.example/good.flv", format: "flv" }];
+      },
+    };
+
+    const result = await runResolver({ anchor: "https://www.douyu.com/601514", outputDir: outDir, adapters: [adapter] });
+
+    expect(result.ok).toBe(true);
+    expect(result.rooms).toHaveLength(2);
+    expect(result.rooms.find((room) => room.roomId === "1")?.error).toMatchObject({
+      code: "stream_resolution_failed",
+      message: "stream failed",
+    });
+    expect(result.rooms.find((room) => room.roomId === "2")?.ok).toBe(true);
+    expect(result.errors).toHaveLength(1);
+  });
+
+  it("returns a structured failure when playlist writing fails", async () => {
+    const outputFile = join(mkdtempSync(join(tmpdir(), "douyu-cs2-")), "not-a-directory");
+    closeSync(openSync(outputFile, "w"));
+
+    const result = await runResolver({
+      anchor: "https://www.douyu.com/601514",
+      outputDir: outputFile,
+      adapters: [resolvingAdapter],
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.eventTitle).toBe("科隆MAJOR");
+    expect(result.rooms.some((room) => room.ok)).toBe(true);
+    expect(result.errors[0]?.code).toBe("playlist_write_failed");
+  });
+
+  it("limits concurrent stream resolution calls", async () => {
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const rooms = Array.from({ length: 6 }, (_, index) => ({
+      platform: "douyu" as const,
+      roomId: `${index + 1}`,
+      roomUrl: `https://www.douyu.com/${index + 1}`,
+      label: `room ${index + 1}`,
+    }));
+    const adapter: PlatformAdapter = {
+      ...resolvingAdapter,
+      discoverEventRooms: async () => rooms,
+      resolveStream: async (room) => {
+        inFlight += 1;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        inFlight -= 1;
+        return [{ url: `https://stream.example/${room.roomId}.flv`, format: "flv" }];
+      },
+    };
+
+    const result = await runResolver({
+      anchor: "https://www.douyu.com/601514",
+      outputDir: mkdtempSync(join(tmpdir(), "douyu-cs2-")),
+      streamConcurrency: 2,
+      adapters: [adapter],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(maxInFlight).toBeLessThanOrEqual(2);
   });
 });

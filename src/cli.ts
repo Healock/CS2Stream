@@ -32,7 +32,17 @@ export async function runCli(argv: string[], io: CliIo, resolve = runResolver): 
       program.setOptionValue("__exitCode", result.ok ? 0 : 1);
     });
 
-  await program.parseAsync(argv);
+  try {
+    await program.parseAsync(argv);
+  } catch (error) {
+    io.stdout.write(`${JSON.stringify({
+      ok: false,
+      rooms: [],
+      errors: [{ code: "network_error", message: errorMessage(error) }],
+    }, null, 2)}\n`);
+    return 1;
+  }
+
   return program.getOptionValue("__exitCode") as number | undefined ?? 0;
 }
 
@@ -42,4 +52,8 @@ if (isDirectExecution()) {
 
 function isDirectExecution(): boolean {
   return Boolean(process.argv[1]) && fileURLToPath(import.meta.url) === resolvePath(process.argv[1]);
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

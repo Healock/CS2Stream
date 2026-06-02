@@ -32,7 +32,17 @@ export async function runResolver(options: RunResolverOptions = {}): Promise<Res
     timeoutMs: config.timeoutMs,
   };
 
-  const eventTitle = await adapter.getEventTitle(config.anchor, context);
+  let eventTitle: string | undefined;
+  try {
+    eventTitle = await adapter.getEventTitle(config.anchor, context);
+  } catch (error) {
+    return {
+      ok: false,
+      rooms: [],
+      errors: [{ code: "anchor_unreachable", message: errorMessage(error) }],
+    };
+  }
+
   if (!eventTitle) {
     return {
       ok: false,
@@ -41,7 +51,18 @@ export async function runResolver(options: RunResolverOptions = {}): Promise<Res
     };
   }
 
-  const rooms = await adapter.discoverEventRooms(config.anchor, context);
+  let rooms;
+  try {
+    rooms = await adapter.discoverEventRooms(config.anchor, context);
+  } catch (error) {
+    return {
+      ok: false,
+      eventTitle,
+      rooms: [],
+      errors: [{ code: "anchor_unreachable", message: errorMessage(error) }],
+    };
+  }
+
   if (rooms.length === 0) {
     return {
       ok: false,
@@ -51,29 +72,39 @@ export async function runResolver(options: RunResolverOptions = {}): Promise<Res
     };
   }
 
-  const resolvedRooms: ResolvedRoom[] = await Promise.all(
-    rooms.map(async (room) => {
-      const candidates = await adapter.resolveStream(room, context);
-      const stream = candidates.find((candidate) => !candidate.requiresAuth);
+  const resolvedRooms = await mapWithConcurrency(
+    rooms,
+    normalizedConcurrency(config.streamConcurrency),
+    async (room): Promise<ResolvedRoom> => {
+      try {
+        const candidates = await adapter.resolveStream(room, context);
+        const stream = candidates.find((candidate) => !candidate.requiresAuth);
 
-      if (!stream && candidates.some((candidate) => candidate.requiresAuth)) {
+        if (!stream && candidates.some((candidate) => candidate.requiresAuth)) {
+          return {
+            ...room,
+            ok: false,
+            error: { code: "auth_required", message: `${room.label} requires account authentication` },
+          };
+        }
+
+        if (!stream) {
+          return {
+            ...room,
+            ok: false,
+            error: { code: "stream_resolution_failed", message: `${room.label} did not produce a playable stream` },
+          };
+        }
+
+        return { ...room, ok: true, stream };
+      } catch (error) {
         return {
           ...room,
           ok: false,
-          error: { code: "auth_required", message: `${room.label} requires account authentication` },
+          error: { code: "stream_resolution_failed", message: errorMessage(error) },
         };
       }
-
-      if (!stream) {
-        return {
-          ...room,
-          ok: false,
-          error: { code: "stream_resolution_failed", message: `${room.label} did not produce a playable stream` },
-        };
-      }
-
-      return { ...room, ok: true, stream };
-    })
+    }
   );
 
   const errors = collectRoomErrors(resolvedRooms);
@@ -88,9 +119,19 @@ export async function runResolver(options: RunResolverOptions = {}): Promise<Res
     };
   }
 
-  mkdirSync(config.outputDir, { recursive: true });
-  const playlistPath = join(config.outputDir, `${sanitizeFileName(eventTitle)}.dpl`);
-  writeFileSync(playlistPath, buildDpl(eventTitle, resolvedRooms, { prefixTitles: config.prefixTitles }), "utf8");
+  let playlistPath: string;
+  try {
+    mkdirSync(config.outputDir, { recursive: true });
+    playlistPath = join(config.outputDir, `${sanitizeFileName(eventTitle)}.dpl`);
+    writeFileSync(playlistPath, buildDpl(eventTitle, resolvedRooms, { prefixTitles: config.prefixTitles }), "utf8");
+  } catch (error) {
+    return {
+      ok: false,
+      eventTitle,
+      rooms: resolvedRooms,
+      errors: [{ code: "playlist_write_failed", message: errorMessage(error) }],
+    };
+  }
 
   return {
     ok: true,
@@ -125,6 +166,30 @@ function selectAdapter(anchor: string, adapters: PlatformAdapter[]): { adapter: 
 
 function collectRoomErrors(rooms: ResolvedRoom[]): ResolverError[] {
   return rooms.map((room) => room.error).filter((error): error is ResolverError => Boolean(error));
+}
+
+async function mapWithConcurrency<T, U>(items: T[], limit: number, mapper: (item: T) => Promise<U>): Promise<U[]> {
+  const results = new Array<U>(items.length);
+  let nextIndex = 0;
+
+  async function worker(): Promise<void> {
+    while (nextIndex < items.length) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+      results[currentIndex] = await mapper(items[currentIndex]);
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()));
+  return results;
+}
+
+function normalizedConcurrency(value: number): number {
+  return Math.max(1, Math.floor(value));
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function sanitizeFileName(value: string): string {

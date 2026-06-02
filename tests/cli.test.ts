@@ -51,4 +51,18 @@ describe("CLI defaults", () => {
     expect(json.ok).toBe(false);
     expect(json.errors).toContainEqual({ code: "unsupported_platform", message: "bad" });
   });
+
+  it("returns failure JSON when the resolver rejects", async () => {
+    const output: string[] = [];
+    const fakeResolver: ResolveFn = async () => {
+      throw new Error("resolver exploded");
+    };
+
+    const code = await runCli(["node", "cli.js"], { stdout: { write: (chunk: string) => output.push(chunk) } }, fakeResolver);
+    const json = JSON.parse(output.join(""));
+
+    expect(code).toBe(1);
+    expect(json.ok).toBe(false);
+    expect(json.errors).toContainEqual({ code: "network_error", message: "resolver exploded" });
+  });
 });
