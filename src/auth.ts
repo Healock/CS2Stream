@@ -12,5 +12,9 @@ export function createAuthContext(cookieHeader?: string): AuthContext {
 }
 
 export function redactSecret(value: string): string {
+  return redactCookieHeader(value);
+}
+
+export function redactCookieHeader(value: string): string {
   return value.replace(/([^=;\s]+)=([^;]+)/g, "$1=<redacted>");
 }
