@@ -14,5 +14,5 @@ string GetVersion()
 
 string GetDesc()
 {
-    return "Resolve Douyu CS2 event rooms through the Node helper and load the generated playlist.";
+    return "Metadata stub for the planned Douyu CS2 PotPlayer entry; Node CLI integration awaits local AngelScript command execution and playlist handoff verification.";
 }

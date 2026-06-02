@@ -31,4 +31,4 @@ node dist/cli.js --anchor https://www.douyu.com/601514 --output-dir out --prefix
 
 The PotPlayer AngelScript entry is in `potplayer/MediaPlayParse - Douyu CS2.as`.
 
-Install it under the matching PotPlayer extension directory only after verifying the local PotPlayer script execution API on the target machine. The current AngelScript file documents the Media PlayParse entry path while Douyu extraction remains owned by the Node resolver.
+The Node CLI is the current working interface. Install the AngelScript file under the matching PotPlayer extension directory only after verifying the local PotPlayer script execution API and playlist handoff on the target machine. The current AngelScript file is a metadata stub that documents the Media PlayParse entry path while Douyu extraction remains owned by the Node resolver.
