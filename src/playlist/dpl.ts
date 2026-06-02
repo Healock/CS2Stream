@@ -5,15 +5,21 @@ export interface DplOptions {
 }
 
 export function buildDpl(eventTitle: string, rooms: ResolvedRoom[], options: DplOptions = {}): string {
+  const normalizedEventTitle = normalizePlaylistField(eventTitle);
   const playableRooms = rooms.filter((room) => room.ok && room.stream?.url);
-  const lines = ["DAUMPLAYLIST", `playname=${eventTitle}`, "topindex=0", "saveplaypos=0"];
+  const lines = ["DAUMPLAYLIST", `playname=${normalizedEventTitle}`, "topindex=0", "saveplaypos=0"];
 
   playableRooms.forEach((room, index) => {
     const item = index + 1;
-    const title = options.prefixTitles ? `[${eventTitle}] ${room.label}` : room.label;
-    lines.push(`${item}*file*${room.stream?.url ?? ""}`);
+    const label = normalizePlaylistField(room.label);
+    const title = options.prefixTitles ? `[${normalizedEventTitle}] ${label}` : label;
+    lines.push(`${item}*file*${normalizePlaylistField(room.stream?.url ?? "")}`);
     lines.push(`${item}*title*${title}`);
   });
 
   return `${lines.join("\n")}\n`;
+}
+
+function normalizePlaylistField(value: string): string {
+  return value.replace(/[\x00-\x1F\x7F]/g, " ").trim();
 }
