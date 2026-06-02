@@ -1,4 +1,4 @@
-﻿export type PlatformId = "douyu" | "huya" | "bilibili";
+export type PlatformId = "douyu" | "huya" | "bilibili";
 
 export interface AuthContext {
   cookieHeader?: string;
