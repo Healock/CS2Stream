@@ -10,17 +10,27 @@ export interface DouyuStreamPayload {
 }
 
 export function resolveDouyuStreamFromApiPayload(payload: DouyuStreamPayload): StreamCandidate[] {
-  const directUrl = payload.url ?? joinDouyuStreamUrl(payload.rtmp_url, payload.rtmp_live);
-  if (!directUrl) return [];
+  const directUrl = payload.url?.trim();
+  const candidateUrl = directUrl || joinDouyuStreamUrl(payload.rtmp_url, payload.rtmp_live);
+  if (!candidateUrl) return [];
 
-  return [
-    {
-      url: directUrl,
-      format: inferFormat(directUrl),
-      quality: payload.rate === 0 ? "best" : undefined,
-      requiresAuth: payload.requiresAuth || undefined,
-    },
-  ];
+  const parsedUrl = parseSupportedStreamUrl(candidateUrl);
+  if (!parsedUrl) return [];
+
+  const candidate: StreamCandidate = {
+    url: candidateUrl,
+    format: inferFormat(parsedUrl),
+  };
+
+  if (payload.rate === 0) {
+    candidate.quality = "best";
+  }
+
+  if (payload.requiresAuth) {
+    candidate.requiresAuth = true;
+  }
+
+  return [candidate];
 }
 
 export async function resolveDouyuRoomStream(
@@ -31,12 +41,25 @@ export async function resolveDouyuRoomStream(
 }
 
 function joinDouyuStreamUrl(base?: string, live?: string): string | undefined {
-  if (!base || !live) return undefined;
-  return `${base.replace(/\/$/, "")}/${live.replace(/^\//, "")}`;
+  const trimmedBase = base?.trim();
+  const trimmedLive = live?.trim();
+  if (!trimmedBase || !trimmedLive) return undefined;
+  return `${trimmedBase.replace(/\/$/, "")}/${trimmedLive.replace(/^\//, "")}`;
 }
 
-function inferFormat(url: string): "flv" | "hls" | "unknown" {
-  if (url.includes(".flv")) return "flv";
-  if (url.includes(".m3u8")) return "hls";
+function parseSupportedStreamUrl(url: string): URL | undefined {
+  try {
+    const parsedUrl = new URL(url);
+    if (!["http:", "https:", "rtmp:"].includes(parsedUrl.protocol)) return undefined;
+    return parsedUrl;
+  } catch {
+    return undefined;
+  }
+}
+
+function inferFormat(url: URL): "flv" | "hls" | "unknown" {
+  const pathname = url.pathname.toLowerCase();
+  if (pathname.endsWith(".flv")) return "flv";
+  if (pathname.endsWith(".m3u8")) return "hls";
   return "unknown";
 }
