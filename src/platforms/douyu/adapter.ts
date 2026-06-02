@@ -62,6 +62,7 @@ export function normalizeDouyuAnchor(input: string): string {
     throw new Error(`Invalid Douyu anchor room path: ${url.pathname}`);
   }
 
+  url.protocol = "https:";
   url.hostname = "www.douyu.com";
   url.pathname = `/${roomId}`;
   return url.toString();

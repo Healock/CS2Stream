@@ -9,6 +9,7 @@ describe("Douyu adapter", () => {
     const adapter = createDouyuAdapter({ fetchHtml: async () => "" });
 
     expect(adapter.detect("https://www.douyu.com/601514")).toBe(true);
+    expect(adapter.detect("http://www.douyu.com/601514")).toBe(true);
     expect(adapter.detect("601514")).toBe(true);
     expect(adapter.detect("https://example.com/601514")).toBe(false);
     expect(adapter.detect("https://evil.example/?next=douyu.com")).toBe(false);
@@ -18,6 +19,9 @@ describe("Douyu adapter", () => {
   it("normalizes only valid Douyu anchors", () => {
     expect(normalizeDouyuAnchor("601514")).toBe("https://www.douyu.com/601514");
     expect(normalizeDouyuAnchor("https://www.douyu.com/601514?dyshid=x")).toBe(
+      "https://www.douyu.com/601514?dyshid=x"
+    );
+    expect(normalizeDouyuAnchor("http://www.douyu.com/601514?dyshid=x")).toBe(
       "https://www.douyu.com/601514?dyshid=x"
     );
     expect(() => normalizeDouyuAnchor("https://evil.example/?next=douyu.com")).toThrow(
