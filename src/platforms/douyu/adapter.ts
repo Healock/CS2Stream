@@ -3,6 +3,7 @@ import type { EventRoom, StreamCandidate } from "../../types.js";
 import type { PlatformAdapter, PlatformContext } from "../types.js";
 import { fetchDouyuHtml, normalizeDouyuFetchUrl } from "./page.js";
 import { parseDouyuSwitchRooms } from "./switchroom.js";
+import { resolveDouyuRoomStream } from "./stream.js";
 import { parseDouyuEventTitle } from "./title.js";
 
 export interface DouyuAdapterDeps {
@@ -12,7 +13,7 @@ export interface DouyuAdapterDeps {
 
 export function createDouyuAdapter(deps: DouyuAdapterDeps = {}): PlatformAdapter {
   const fetchHtml = deps.fetchHtml ?? ((url, context) => fetchDouyuHtml(url, context.auth, context.timeoutMs));
-  const resolveStream = deps.resolveStream ?? (async () => []);
+  const resolveStream = deps.resolveStream ?? resolveDouyuRoomStream;
 
   return {
     id: "douyu",
