@@ -6,7 +6,7 @@ export function parseDouyuSwitchRooms(html: string): EventRoom[] {
   const rooms: EventRoom[] = [];
   const seenRoomIds = new Set<string>();
 
-  $(".wm-pc-switchroom a[href*='douyu.com/']").each((_, element) => {
+  $(".wm-pc-switchroom a[href]").each((_, element) => {
     const href = $(element).attr("href") ?? "";
     const roomId = extractDouyuRoomId(href);
     if (!roomId || seenRoomIds.has(roomId)) {
@@ -31,6 +31,17 @@ export function parseDouyuSwitchRooms(html: string): EventRoom[] {
 }
 
 function extractDouyuRoomId(href: string): string | undefined {
-  const match = href.match(/douyu\.com\/(\d+)(?:[/?#]|$)/);
-  return match?.[1];
+  let url: URL;
+  try {
+    url = new URL(href, "https://www.douyu.com");
+  } catch {
+    return undefined;
+  }
+
+  if (url.hostname !== "www.douyu.com" && url.hostname !== "douyu.com") {
+    return undefined;
+  }
+
+  const firstPathSegment = url.pathname.split("/").filter(Boolean)[0];
+  return firstPathSegment && /^\d+$/.test(firstPathSegment) ? firstPathSegment : undefined;
 }

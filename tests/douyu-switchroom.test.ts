@@ -44,4 +44,18 @@ describe("parseDouyuSwitchRooms", () => {
   it("returns an empty list when the switch-room container is missing", () => {
     expect(parseDouyuSwitchRooms("<main></main>")).toEqual([]);
   });
+
+  it("parses root-relative Douyu room links", () => {
+    const html =
+      '<div class="wm-pc-switchroom"><a href="/601514?dyshid=test"><div class="wm-pc-room-button-text">主舞台纯净流</div></a></div>';
+
+    expect(parseDouyuSwitchRooms(html)).toEqual([
+      {
+        platform: "douyu",
+        roomId: "601514",
+        roomUrl: "https://www.douyu.com/601514",
+        label: "主舞台纯净流",
+      },
+    ]);
+  });
 });
