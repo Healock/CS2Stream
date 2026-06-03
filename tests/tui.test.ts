@@ -89,6 +89,37 @@ describe("cs2stream TUI", () => {
     expect(getOutput()).toContain("Huya and Bilibili support is reserved");
   });
 
+  test("switches language between Chinese and English", async () => {
+    const { io, getOutput } = createIo(["9", "1", "9", "2", "0"]);
+
+    await runTui({ io, resolve: vi.fn(), openPlaylist: vi.fn() });
+
+    expect(getOutput()).toContain("语言已切换为中文。");
+    expect(getOutput()).toContain("CS2 直播助手");
+    expect(getOutput()).toContain("Language switched to English.");
+    expect(getOutput()).toContain("CS2 Stream Assistant");
+  });
+
+  test("exits cleanly when input closes during language prompt", async () => {
+    let questionCount = 0;
+    const io = {
+      write() {},
+      async question() {
+        questionCount += 1;
+        if (questionCount === 1) {
+          return "9";
+        }
+
+        const error = new Error("readline was closed");
+        Object.assign(error, { code: "ERR_USE_AFTER_CLOSE" });
+        throw error;
+      },
+      close() {},
+    };
+
+    await expect(runTui({ io, resolve: vi.fn(), openPlaylist: vi.fn() })).resolves.toBe(0);
+  });
+
   test("exits cleanly when piped input ends after a command", async () => {
     let output = "";
     const result: ResolverResult = {

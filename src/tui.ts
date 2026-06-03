@@ -4,19 +4,28 @@ import { stdin as input, stdout as output } from "node:process";
 import { isDirectExecutionPath } from "./direct-execution.js";
 import { openPlaylistInPotPlayer, type OpenPlaylistResult } from "./potplayer.js";
 import { runResolver, type RunResolverOptions } from "./resolver.js";
+import { LineQuestionQueue } from "./tui/line-queue.js";
 import {
   createInitialTuiState,
+  parseLanguageSelection,
   parseMenuAction,
+  renderInvalidLanguageMessage,
+  renderInvalidOptionMessage,
+  renderLanguageChangedMessage,
+  renderLanguagePrompt,
   renderMainMenu,
+  renderNoPreviousResultMessage,
   renderPlaceholderMessage,
+  renderResolvingMessage,
   renderResultSummary,
+  renderSelectOptionPrompt,
   type TuiState,
 } from "./tui/menu.js";
 import type { ResolverResult } from "./types.js";
 
 export interface TuiIo {
   write(chunk: string): void;
-  question(prompt: string): Promise<string>;
+  question(prompt: string): Promise<string | undefined>;
   close(): void;
 }
 
@@ -39,7 +48,7 @@ export async function runTui(options: RunTuiOptions = {}): Promise<number> {
     let shouldExit = false;
     while (!shouldExit) {
       io.write(renderMainMenu(state));
-      const choice = await askMenuChoice(io);
+      const choice = await askQuestion(io, renderSelectOptionPrompt(state.language));
       if (choice === undefined) {
         break;
       }
@@ -52,7 +61,7 @@ export async function runTui(options: RunTuiOptions = {}): Promise<number> {
           await resolveAndMaybeOpen(state, io, resolve, openPlaylist, false);
           break;
         case "show-last-result":
-          io.write(state.lastResult ? `${renderResultSummary(state.lastResult)}\n` : "No previous result.\n");
+          io.write(state.lastResult ? `${renderResultSummary(state.lastResult, state.language)}\n` : `${renderNoPreviousResultMessage(state.language)}\n`);
           break;
         case "set-potplayer-path":
           state.potPlayerPath = await promptOptionalValue(io, "PotPlayer executable path: ");
@@ -64,16 +73,19 @@ export async function runTui(options: RunTuiOptions = {}): Promise<number> {
           state.outputDir = await promptRequiredValue(io, "Output directory: ", state.outputDir);
           break;
         case "auth-settings":
-          io.write(`${renderPlaceholderMessage("auth-settings")}\n`);
+          io.write(`${renderPlaceholderMessage("auth-settings", state.language)}\n`);
           break;
         case "platform-settings":
-          io.write(`${renderPlaceholderMessage("platform-settings")}\n`);
+          io.write(`${renderPlaceholderMessage("platform-settings", state.language)}\n`);
+          break;
+        case "set-language":
+          await setLanguage(state, io);
           break;
         case "exit":
           shouldExit = true;
           break;
         case "invalid":
-          io.write("Invalid option.\n");
+          io.write(`${renderInvalidOptionMessage(state.language)}\n`);
           break;
       }
     }
@@ -84,9 +96,9 @@ export async function runTui(options: RunTuiOptions = {}): Promise<number> {
   }
 }
 
-async function askMenuChoice(io: TuiIo): Promise<string | undefined> {
+async function askQuestion(io: TuiIo, prompt: string): Promise<string | undefined> {
   try {
-    return await io.question("Select option: ");
+    return await io.question(prompt);
   } catch (error) {
     if (isInputClosedError(error)) {
       return undefined;
@@ -96,6 +108,23 @@ async function askMenuChoice(io: TuiIo): Promise<string | undefined> {
   }
 }
 
+async function setLanguage(state: TuiState, io: TuiIo): Promise<void> {
+  const input = await askQuestion(io, renderLanguagePrompt(state.language));
+  if (input === undefined) {
+    return;
+  }
+
+  const language = parseLanguageSelection(input);
+
+  if (!language) {
+    io.write(`${renderInvalidLanguageMessage(state.language)}\n`);
+    return;
+  }
+
+  state.language = language;
+  io.write(`${renderLanguageChangedMessage(state.language)}\n`);
+}
+
 async function resolveAndMaybeOpen(
   state: TuiState,
   io: TuiIo,
@@ -103,10 +132,10 @@ async function resolveAndMaybeOpen(
   openPlaylist: TuiOpenPlaylistFn,
   shouldOpen: boolean
 ): Promise<void> {
-  io.write("Resolving Douyu CS2 rooms...\n");
+  io.write(renderResolvingMessage(state.language));
   const result = await resolve({ anchor: state.anchor, outputDir: state.outputDir });
   state.lastResult = result;
-  io.write(`${renderResultSummary(result)}\n`);
+  io.write(`${renderResultSummary(result, state.language)}\n`);
 
   if (!shouldOpen || !result.ok || !result.playlistPath) {
     return;
@@ -124,23 +153,42 @@ async function resolveAndMaybeOpen(
 }
 
 async function promptOptionalValue(io: TuiIo, prompt: string): Promise<string | undefined> {
-  const value = (await io.question(prompt)).trim();
+  const input = await askQuestion(io, prompt);
+  if (input === undefined) {
+    return undefined;
+  }
+
+  const value = input.trim();
   return value || undefined;
 }
 
 async function promptRequiredValue(io: TuiIo, prompt: string, fallback: string): Promise<string> {
-  const value = (await io.question(prompt)).trim();
+  const input = await askQuestion(io, prompt);
+  if (input === undefined) {
+    return fallback;
+  }
+
+  const value = input.trim();
   return value || fallback;
 }
 
 function createDefaultIo(): TuiIo {
-  const readline = createInterface({ input, output });
+  const readline = createInterface({ input, output, terminal: input.isTTY && output.isTTY });
+  const queue = new LineQuestionQueue();
+  readline.on("line", (line) => {
+    queue.pushLine(line);
+  });
+  readline.on("close", () => {
+    queue.close();
+  });
+
   return {
     write(chunk) {
       output.write(chunk);
     },
-    question(prompt) {
-      return readline.question(prompt);
+    async question(prompt) {
+      output.write(prompt);
+      return await queue.question();
     },
     close() {
       readline.close();

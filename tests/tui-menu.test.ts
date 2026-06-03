@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import type { ResolverResult } from "../src/types.js";
 import {
   createInitialTuiState,
+  parseLanguageSelection,
   parseMenuAction,
   renderPlaceholderMessage,
   renderMainMenu,
@@ -18,7 +19,20 @@ describe("TUI menu", () => {
     expect(menu).toContain("PotPlayer: auto");
     expect(menu).toContain("1. Resolve Douyu CS2 and open in PotPlayer");
     expect(menu).toContain("8. Other platform settings");
+    expect(menu).toContain("9. Language");
     expect(menu).toContain("0. Exit");
+  });
+
+  test("renders Chinese menu state", () => {
+    const menu = renderMainMenu({ ...createInitialTuiState(), language: "zh" });
+
+    expect(menu).toContain("CS2 直播助手");
+    expect(menu).toContain("入口: https://www.douyu.com/601514");
+    expect(menu).toContain("输出目录: out");
+    expect(menu).toContain("PotPlayer: 自动");
+    expect(menu).toContain("1. 获取斗鱼 CS2 赛事并打开 PotPlayer");
+    expect(menu).toContain("9. 语言");
+    expect(menu).toContain("0. 退出");
   });
 
   test.each([
@@ -30,6 +44,7 @@ describe("TUI menu", () => {
     ["6", "set-output-dir"],
     ["7", "auth-settings"],
     ["8", "platform-settings"],
+    ["9", "set-language"],
     ["0", "exit"],
   ] as const)("maps input %s to %s", (input, action) => {
     expect(parseMenuAction(input)).toBe(action);
@@ -40,8 +55,23 @@ describe("TUI menu", () => {
   });
 
   test("returns invalid for unknown menu choices", () => {
-    expect(parseMenuAction("9")).toBe("invalid");
+    expect(parseMenuAction("10")).toBe("invalid");
     expect(parseMenuAction("abc")).toBe("invalid");
+  });
+
+  test.each([
+    ["1", "zh"],
+    ["zh", "zh"],
+    ["中文", "zh"],
+    ["2", "en"],
+    ["en", "en"],
+    ["english", "en"],
+  ] as const)("maps language input %s to %s", (input, language) => {
+    expect(parseLanguageSelection(input)).toBe(language);
+  });
+
+  test("returns undefined for invalid language choices", () => {
+    expect(parseLanguageSelection("3")).toBeUndefined();
   });
 });
 
@@ -96,5 +126,6 @@ describe("TUI result summaries", () => {
   test("renders explicit placeholder messages", () => {
     expect(renderPlaceholderMessage("auth-settings")).toContain("Account authentication settings are reserved");
     expect(renderPlaceholderMessage("platform-settings")).toContain("Huya and Bilibili support is reserved");
+    expect(renderPlaceholderMessage("auth-settings", "zh")).toContain("账号验证设置将在后续版本开放");
   });
 });
