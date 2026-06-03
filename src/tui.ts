@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
-import { resolve as resolvePath } from "node:path";
-import { fileURLToPath } from "node:url";
+import { isDirectExecutionPath } from "./direct-execution.js";
 import { openPlaylistInPotPlayer, type OpenPlaylistResult } from "./potplayer.js";
 import { runResolver, type RunResolverOptions } from "./resolver.js";
 import {
@@ -135,7 +134,7 @@ function createDefaultIo(): TuiIo {
 }
 
 function isDirectExecution(): boolean {
-  return Boolean(process.argv[1]) && fileURLToPath(import.meta.url) === resolvePath(process.argv[1]);
+  return isDirectExecutionPath(process.argv[1], import.meta.url);
 }
 
 if (isDirectExecution()) {

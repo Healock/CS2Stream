@@ -1,7 +1,6 @@
 #!/usr/bin/env node
-import { resolve as resolvePath } from "node:path";
-import { fileURLToPath } from "node:url";
 import { Command } from "commander";
+import { isDirectExecutionPath } from "./direct-execution.js";
 import { runResolver } from "./resolver.js";
 import type { RunResolverOptions } from "./resolver.js";
 import type { ResolverResult } from "./types.js";
@@ -66,7 +65,7 @@ if (isDirectExecution()) {
 }
 
 function isDirectExecution(): boolean {
-  return Boolean(process.argv[1]) && fileURLToPath(import.meta.url) === resolvePath(process.argv[1]);
+  return isDirectExecutionPath(process.argv[1], import.meta.url);
 }
 
 function errorMessage(error: unknown): string {
