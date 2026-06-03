@@ -46,7 +46,7 @@ describe("cs2stream TUI", () => {
     const exitCode = await runTui({ io, resolve, openPlaylist });
 
     expect(exitCode).toBe(0);
-    expect(resolve).toHaveBeenCalledWith({ anchor: "https://www.douyu.com/601514", outputDir: "out" });
+    expect(resolve).toHaveBeenCalledWith({ anchor: "https://www.douyu.com/601514", outputDir: "out", cleanStreamFilter: "clean-only" });
     expect(openPlaylist).toHaveBeenCalledWith("out\\科隆MAJOR.dpl", { explicitPath: undefined });
     expect(getOutput()).toContain("Opened in PotPlayer");
     expect(getOutput()).toContain("科隆MAJOR");
@@ -77,7 +77,7 @@ describe("cs2stream TUI", () => {
 
     await runTui({ io, resolve, openPlaylist: vi.fn() });
 
-    expect(resolve).toHaveBeenCalledWith({ anchor: "123456", outputDir: "D:\\Streams" });
+    expect(resolve).toHaveBeenCalledWith({ anchor: "123456", outputDir: "D:\\Streams", cleanStreamFilter: "clean-only" });
   });
 
   test("shows placeholder messages", async () => {

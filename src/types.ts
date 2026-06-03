@@ -31,6 +31,7 @@ export interface ResolverError {
     | "anchor_unreachable"
     | "title_missing"
     | "switchroom_missing"
+    | "clean_stream_missing"
     | "auth_required"
     | "room_offline"
     | "stream_resolution_failed"

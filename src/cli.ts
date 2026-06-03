@@ -30,11 +30,13 @@ export async function runCli(argv: string[], io: CliIo, resolve = runResolver): 
     .option("-a, --anchor <url>", "Douyu anchor URL or room ID", "https://www.douyu.com/601514")
     .option("-o, --output-dir <path>", "Playlist output directory", "out")
     .option("--prefix-titles", "Prefix playlist item titles with the event title")
-    .action(async (options: { anchor: string; outputDir: string; prefixTitles?: boolean }) => {
+    .option("--all-rooms", "Include rooms even when their titles do not contain 纯净流")
+    .action(async (options: { anchor: string; outputDir: string; prefixTitles?: boolean; allRooms?: boolean }) => {
       const result = await resolve({
         anchor: options.anchor,
         outputDir: options.outputDir,
         prefixTitles: Boolean(options.prefixTitles),
+        cleanStreamFilter: options.allRooms ? "all" : "clean-only",
       });
 
       io.stdout.write(`${JSON.stringify(result, null, 2)}\n`);

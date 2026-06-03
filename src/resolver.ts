@@ -72,6 +72,17 @@ export async function runResolver(options: RunResolverOptions = {}): Promise<Res
     };
   }
 
+  rooms = filterRoomsByCleanStreamPolicy(rooms, config.cleanStreamFilter);
+
+  if (rooms.length === 0) {
+    return {
+      ok: false,
+      eventTitle,
+      rooms: [],
+      errors: [{ code: "clean_stream_missing", message: "No rooms found with titles containing 纯净流" }],
+    };
+  }
+
   const resolvedRooms = await mapWithConcurrency(
     rooms,
     normalizedConcurrency(config.streamConcurrency),
@@ -166,6 +177,14 @@ function selectAdapter(anchor: string, adapters: PlatformAdapter[]): { adapter: 
 
 function collectRoomErrors(rooms: ResolvedRoom[]): ResolverError[] {
   return rooms.map((room) => room.error).filter((error): error is ResolverError => Boolean(error));
+}
+
+function filterRoomsByCleanStreamPolicy<T extends { label: string }>(rooms: T[], policy: "clean-only" | "all"): T[] {
+  if (policy === "all") {
+    return rooms;
+  }
+
+  return rooms.filter((room) => room.label.includes("纯净流"));
 }
 
 async function mapWithConcurrency<T, U>(items: T[], limit: number, mapper: (item: T) => Promise<U>): Promise<U[]> {

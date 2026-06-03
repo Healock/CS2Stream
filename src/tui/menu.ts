@@ -14,11 +14,13 @@ export type MenuAction =
   | "invalid";
 
 export type TuiLanguage = "en" | "zh";
+export type CleanStreamFilter = "clean-only" | "all";
 
 export interface TuiState {
   anchor: string;
   outputDir: string;
   language: TuiLanguage;
+  cleanStreamFilter: CleanStreamFilter;
   potPlayerPath?: string;
   lastResult?: ResolverResult;
 }
@@ -28,6 +30,7 @@ export function createInitialTuiState(): TuiState {
     anchor: "https://www.douyu.com/601514",
     outputDir: "out",
     language: "en",
+    cleanStreamFilter: "clean-only",
   };
 }
 

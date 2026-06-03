@@ -133,7 +133,11 @@ async function resolveAndMaybeOpen(
   shouldOpen: boolean
 ): Promise<void> {
   io.write(renderResolvingMessage(state.language));
-  const result = await resolve({ anchor: state.anchor, outputDir: state.outputDir });
+  const result = await resolve({
+    anchor: state.anchor,
+    outputDir: state.outputDir,
+    cleanStreamFilter: state.cleanStreamFilter,
+  });
   state.lastResult = result;
   io.write(`${renderResultSummary(result, state.language)}\n`);
 

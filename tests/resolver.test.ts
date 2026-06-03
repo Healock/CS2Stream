@@ -91,7 +91,12 @@ describe("runResolver", () => {
       },
     };
 
-    const result = await runResolver({ anchor: "https://www.douyu.com/601514", outputDir: outDir, adapters: [adapter] });
+    const result = await runResolver({
+      anchor: "https://www.douyu.com/601514",
+      outputDir: outDir,
+      adapters: [adapter],
+      cleanStreamFilter: "all",
+    });
 
     expect(result.ok).toBe(true);
     expect(result.rooms).toHaveLength(2);
@@ -101,6 +106,71 @@ describe("runResolver", () => {
     });
     expect(result.rooms.find((room) => room.roomId === "2")?.ok).toBe(true);
     expect(result.errors).toHaveLength(1);
+  });
+
+  it("defaults to only resolving rooms whose labels contain pure stream text", async () => {
+    const outDir = mkdtempSync(join(tmpdir(), "douyu-cs2-"));
+    const adapter: PlatformAdapter = {
+      ...resolvingAdapter,
+      discoverEventRooms: async () => [
+        { platform: "douyu", roomId: "1", roomUrl: "https://www.douyu.com/1", label: "Major主舞台纯净流" },
+        { platform: "douyu", roomId: "2", roomUrl: "https://www.douyu.com/2", label: "主播二路解说" },
+      ],
+      resolveStream: async (room) => [{ url: `https://stream.example/${room.roomId}.flv`, format: "flv" }],
+    };
+
+    const result = await runResolver({
+      anchor: "https://www.douyu.com/601514",
+      outputDir: outDir,
+      adapters: [adapter],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.rooms.map((room) => room.label)).toEqual(["Major主舞台纯净流"]);
+    expect(readFileSync(result.playlistPath!, "utf8")).toContain("Major主舞台纯净流");
+    expect(readFileSync(result.playlistPath!, "utf8")).not.toContain("主播二路解说");
+  });
+
+  it("can resolve all rooms when clean stream filtering is disabled", async () => {
+    const outDir = mkdtempSync(join(tmpdir(), "douyu-cs2-"));
+    const adapter: PlatformAdapter = {
+      ...resolvingAdapter,
+      discoverEventRooms: async () => [
+        { platform: "douyu", roomId: "1", roomUrl: "https://www.douyu.com/1", label: "Major主舞台纯净流" },
+        { platform: "douyu", roomId: "2", roomUrl: "https://www.douyu.com/2", label: "主播二路解说" },
+      ],
+      resolveStream: async (room) => [{ url: `https://stream.example/${room.roomId}.flv`, format: "flv" }],
+    };
+
+    const result = await runResolver({
+      anchor: "https://www.douyu.com/601514",
+      outputDir: outDir,
+      adapters: [adapter],
+      cleanStreamFilter: "all",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.rooms.map((room) => room.label)).toEqual(["Major主舞台纯净流", "主播二路解说"]);
+  });
+
+  it("returns a clear failure when clean-only filtering removes every room", async () => {
+    const result = await runResolver({
+      anchor: "https://www.douyu.com/601514",
+      adapters: [{
+        ...resolvingAdapter,
+        discoverEventRooms: async () => [
+          { platform: "douyu", roomId: "1", roomUrl: "https://www.douyu.com/1", label: "主播二路解说" },
+        ],
+      }],
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.eventTitle).toBe("科隆MAJOR");
+    expect(result.rooms).toEqual([]);
+    expect(result.errors[0]).toMatchObject({
+      code: "clean_stream_missing",
+      message: "No rooms found with titles containing 纯净流",
+    });
   });
 
   it("returns a structured failure when playlist writing fails", async () => {
@@ -144,6 +214,7 @@ describe("runResolver", () => {
       anchor: "https://www.douyu.com/601514",
       outputDir: mkdtempSync(join(tmpdir(), "douyu-cs2-")),
       streamConcurrency: 2,
+      cleanStreamFilter: "all",
       adapters: [adapter],
     });
 
@@ -156,6 +227,7 @@ describe("runResolver", () => {
       anchor: "https://www.douyu.com/601514",
       outputDir: mkdtempSync(join(tmpdir(), "douyu-cs2-")),
       streamConcurrency: Number.NaN,
+      cleanStreamFilter: "all",
       adapters: [multiRoomAdapter()],
     });
 
@@ -169,6 +241,7 @@ describe("runResolver", () => {
       anchor: "https://www.douyu.com/601514",
       outputDir: mkdtempSync(join(tmpdir(), "douyu-cs2-")),
       streamConcurrency: 0,
+      cleanStreamFilter: "all",
       adapters: [multiRoomAdapter()],
     });
 
@@ -182,6 +255,7 @@ describe("runResolver", () => {
       anchor: "https://www.douyu.com/601514",
       outputDir: mkdtempSync(join(tmpdir(), "douyu-cs2-")),
       streamConcurrency: undefined,
+      cleanStreamFilter: "all",
       adapters: [multiRoomAdapter()],
     });
 
@@ -195,6 +269,7 @@ describe("runResolver", () => {
       anchor: "https://www.douyu.com/601514",
       outputDir: mkdtempSync(join(tmpdir(), "douyu-cs2-")),
       streamConcurrency: -1,
+      cleanStreamFilter: "all",
       adapters: [multiRoomAdapter()],
     });
 

@@ -30,10 +30,28 @@ describe("CLI defaults", () => {
       fakeResolver
     );
 
-    expect(calls).toEqual([{ anchor: "601514", outputDir: "tmp-out", prefixTitles: true }]);
+    expect(calls).toEqual([{ anchor: "601514", outputDir: "tmp-out", prefixTitles: true, cleanStreamFilter: "clean-only" }]);
     expect(JSON.parse(output.join(""))).toMatchObject({ ok: true, eventTitle: "科隆MAJOR" });
     expect(output.join("")).toMatch(/\n$/);
     expect(code).toBe(0);
+  });
+
+  it("can disable clean-stream-only filtering", async () => {
+    const calls: RunResolverOptions[] = [];
+    const output: string[] = [];
+    const fakeResolver: ResolveFn = async (options) => {
+      calls.push(options);
+      return { ok: true, rooms: [], errors: [] };
+    };
+
+    const code = await runCli(
+      ["node", "cli.js", "--all-rooms"],
+      { stdout: { write: (chunk: string) => output.push(chunk) } },
+      fakeResolver
+    );
+
+    expect(code).toBe(0);
+    expect(calls).toEqual([{ anchor: "https://www.douyu.com/601514", outputDir: "out", prefixTitles: false, cleanStreamFilter: "all" }]);
   });
 
   it("returns failure exit code and prints resolver errors", async () => {
