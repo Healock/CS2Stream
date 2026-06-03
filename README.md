@@ -8,14 +8,24 @@ The current default anchor is `https://www.douyu.com/601514`.
 
 This first implementation supports Douyu only. Authentication support and additional live platforms such as Huya and Bilibili are future extension points.
 
-## Development
+## Usage
 
 Run commands from the repository root in Windows PowerShell:
 
 ```powershell
 npm install
-npm test
 npm run build
+npm link
+cs2stream
+```
+
+`cs2stream` opens a menu. The default option resolves the current Douyu CS2 event from `https://www.douyu.com/601514`, writes a `.dpl` playlist, and opens it in PotPlayer when PotPlayer can be located.
+
+If automatic launch fails, use the playlist path shown in the TUI and open that `.dpl` manually in PotPlayer. You can also set the PotPlayer executable path from the TUI.
+
+The raw CLI remains available:
+
+```powershell
 node dist/cli.js --anchor https://www.douyu.com/601514 --output-dir out
 ```
 
@@ -25,6 +35,15 @@ If PotPlayer does not display DPL `playname` values as folder-like labels, run t
 
 ```powershell
 node dist/cli.js --anchor https://www.douyu.com/601514 --output-dir out --prefix-titles
+```
+
+## Development
+
+Run checks from the repository root:
+
+```powershell
+npm test
+npm run build
 ```
 
 ## PotPlayer Entry
