@@ -6,7 +6,10 @@
   "engines": {
     "node": ">=20.18.1"
   },
-  "bin": { "douyu-cs2-potplayer": "./dist/cli.js" },
+  "bin": {
+    "cs2stream": "./dist/tui.js",
+    "douyu-cs2-potplayer": "./dist/cli.js"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
