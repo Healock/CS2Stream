@@ -52,7 +52,7 @@ export function openPlaylistInPotPlayer(playlistPath: string, options: OpenPlayl
   }
 
   try {
-    const child = spawn("cmd.exe", ["/c", "start", "", playlistPath], launchOptions());
+    const child = spawn("rundll32.exe", ["url.dll,FileProtocolHandler", playlistPath], launchOptions());
     child?.unref?.();
     return { ok: true, mode: "file-association" };
   } catch (error) {

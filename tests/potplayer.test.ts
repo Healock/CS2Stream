@@ -46,7 +46,7 @@ describe("PotPlayer integration", () => {
     });
 
     expect(result).toEqual({ ok: true, mode: "file-association" });
-    expect(spawn).toHaveBeenCalledWith("cmd.exe", ["/c", "start", "", "out\\科隆MAJOR.dpl"], {
+    expect(spawn).toHaveBeenCalledWith("rundll32.exe", ["url.dll,FileProtocolHandler", "out\\科隆MAJOR.dpl"], {
       detached: true,
       stdio: "ignore",
       windowsHide: true,
