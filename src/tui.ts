@@ -39,7 +39,10 @@ export async function runTui(options: RunTuiOptions = {}): Promise<number> {
     let shouldExit = false;
     while (!shouldExit) {
       io.write(renderMainMenu(state));
-      const choice = await io.question("Select option: ");
+      const choice = await askMenuChoice(io);
+      if (choice === undefined) {
+        break;
+      }
 
       switch (parseMenuAction(choice)) {
         case "resolve-and-open":
@@ -78,6 +81,18 @@ export async function runTui(options: RunTuiOptions = {}): Promise<number> {
     return 0;
   } finally {
     io.close();
+  }
+}
+
+async function askMenuChoice(io: TuiIo): Promise<string | undefined> {
+  try {
+    return await io.question("Select option: ");
+  } catch (error) {
+    if (isInputClosedError(error)) {
+      return undefined;
+    }
+
+    throw error;
   }
 }
 
@@ -131,6 +146,13 @@ function createDefaultIo(): TuiIo {
       readline.close();
     },
   };
+}
+
+function isInputClosedError(error: unknown): boolean {
+  return typeof error === "object"
+    && error !== null
+    && "code" in error
+    && (error.code === "ERR_USE_AFTER_CLOSE" || error.code === "ERR_STREAM_PREMATURE_CLOSE");
 }
 
 function isDirectExecution(): boolean {

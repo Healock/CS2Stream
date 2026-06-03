@@ -88,4 +88,36 @@ describe("cs2stream TUI", () => {
     expect(getOutput()).toContain("Account authentication settings are reserved");
     expect(getOutput()).toContain("Huya and Bilibili support is reserved");
   });
+
+  test("exits cleanly when piped input ends after a command", async () => {
+    let output = "";
+    const result: ResolverResult = {
+      ok: true,
+      eventTitle: "科隆MAJOR",
+      playlistPath: "out\\科隆MAJOR.dpl",
+      rooms: [],
+      errors: [],
+    };
+    const io = {
+      write(chunk: string) {
+        output += chunk;
+      },
+      async question(prompt: string) {
+        output += prompt;
+        if (output.includes("Resolve complete")) {
+          const error = new Error("readline was closed");
+          Object.assign(error, { code: "ERR_USE_AFTER_CLOSE" });
+          throw error;
+        }
+
+        return "2";
+      },
+      close() {},
+    };
+
+    const exitCode = await runTui({ io, resolve: vi.fn().mockResolvedValue(result), openPlaylist: vi.fn() });
+
+    expect(exitCode).toBe(0);
+    expect(output).toContain("Resolve complete");
+  });
 });
