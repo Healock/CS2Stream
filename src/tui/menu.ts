@@ -72,3 +72,51 @@ export function parseMenuAction(input: string): MenuAction {
       return "invalid";
   }
 }
+
+export function renderResultSummary(result: ResolverResult): string {
+  const lines: string[] = [];
+
+  if (result.ok) {
+    lines.push("Resolve complete");
+    lines.push(`Event: ${result.eventTitle ?? "(unknown)"}`);
+    lines.push(`Playlist: ${result.playlistPath ?? "(not written)"}`);
+  } else {
+    lines.push("Resolve failed");
+    if (result.eventTitle) {
+      lines.push(`Event: ${result.eventTitle}`);
+    }
+    if (result.playlistPath) {
+      lines.push(`Playlist: ${result.playlistPath}`);
+    }
+  }
+
+  const total = result.rooms.length;
+  const playable = result.rooms.filter((room) => room.ok).length;
+  const failed = total - playable;
+  lines.push(`Rooms: ${total} total, ${playable} playable, ${failed} failed`);
+
+  const failedRooms = result.rooms.filter((room) => !room.ok);
+  if (failedRooms.length > 0) {
+    lines.push("Failed rooms:");
+    for (const room of failedRooms) {
+      lines.push(`- ${room.label}: ${room.error?.message ?? "unknown error"}`);
+    }
+  }
+
+  if (!result.ok && result.errors.length > 0) {
+    lines.push("Errors:");
+    for (const error of result.errors) {
+      lines.push(`- ${error.code}: ${error.message}`);
+    }
+  }
+
+  return lines.join("\n");
+}
+
+export function renderPlaceholderMessage(action: "auth-settings" | "platform-settings"): string {
+  if (action === "auth-settings") {
+    return "Account authentication settings are reserved for a later version.";
+  }
+
+  return "Huya and Bilibili support is reserved for a later version.";
+}
