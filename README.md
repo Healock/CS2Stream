@@ -1,5 +1,7 @@
 # CS2Stream
 
+[English](./README.md) | [简体中文](./README.zh-CN.md)
+
 CS2Stream is a Windows command-line helper for resolving CS2 event live streams and generating PotPlayer-compatible playlists.
 
 It currently targets CS2 event coverage on Douyu, Huya, and Bilibili. The main interface is an interactive TUI, while a JSON CLI is also available for scripting and debugging.
