@@ -66,6 +66,22 @@ notepad .\install.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
+## Uninstall
+
+Remove the global CS2Stream command:
+
+```powershell
+npm uninstall -g cs2stream
+```
+
+If the installer created a user-local portable Node.js because Node.js was missing or too old, remove the helper directory as well:
+
+```powershell
+Remove-Item "$env:LOCALAPPDATA\CS2Stream" -Recurse -Force
+```
+
+Most users only need the npm uninstall command.
+
 ## Usage
 
 Start the TUI:
