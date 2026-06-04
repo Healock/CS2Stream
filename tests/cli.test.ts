@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createDefaultConfig } from "../src/config.js";
+import { DEFAULT_ANCHORS, createDefaultConfig } from "../src/config.js";
 import { runCli, type ResolveFn } from "../src/cli.js";
 import type { RunResolverOptions } from "../src/resolver.js";
 import type { ResolverResult } from "../src/types.js";
@@ -7,6 +7,12 @@ import type { ResolverResult } from "../src/types.js";
 describe("CLI defaults", () => {
   it("uses room 601514 as the default anchor", () => {
     expect(createDefaultConfig().anchor).toBe("https://www.douyu.com/601514");
+  });
+
+  it("uses CS2 platform anchors by default", () => {
+    expect(createDefaultConfig().anchors).toEqual([...DEFAULT_ANCHORS]);
+    expect(createDefaultConfig().anchors).toContain("https://www.huya.com/eslcs");
+    expect(createDefaultConfig({ anchor: "https://www.douyu.com/123" }).anchors).toEqual(["https://www.douyu.com/123"]);
   });
 
   it("passes parsed options to the resolver and prints successful JSON", async () => {
@@ -30,7 +36,7 @@ describe("CLI defaults", () => {
       fakeResolver
     );
 
-    expect(calls).toEqual([{ anchor: "601514", outputDir: "tmp-out", prefixTitles: true, cleanStreamFilter: "clean-only" }]);
+    expect(calls).toEqual([{ anchor: "601514", anchors: ["601514"], outputDir: "tmp-out", prefixTitles: true, cleanStreamFilter: "clean-only" }]);
     expect(JSON.parse(output.join(""))).toMatchObject({ ok: true, eventTitle: "科隆MAJOR" });
     expect(output.join("")).toMatch(/\n$/);
     expect(code).toBe(0);
@@ -51,7 +57,30 @@ describe("CLI defaults", () => {
     );
 
     expect(code).toBe(0);
-    expect(calls).toEqual([{ anchor: "https://www.douyu.com/601514", outputDir: "out", prefixTitles: false, cleanStreamFilter: "all" }]);
+    expect(calls).toEqual([{ outputDir: "out", prefixTitles: false, cleanStreamFilter: "all" }]);
+  });
+
+  it("supports repeated platform entry anchors", async () => {
+    const calls: RunResolverOptions[] = [];
+    const fakeResolver: ResolveFn = async (options) => {
+      calls.push(options);
+      return { ok: true, rooms: [], errors: [] };
+    };
+
+    const code = await runCli(
+      ["node", "cli.js", "--anchor", "https://www.huya.com/825801", "--anchor", "https://live.bilibili.com/35"],
+      { stdout: { write: () => undefined } },
+      fakeResolver
+    );
+
+    expect(code).toBe(0);
+    expect(calls).toEqual([{
+      anchor: "https://www.huya.com/825801",
+      anchors: ["https://www.huya.com/825801", "https://live.bilibili.com/35"],
+      outputDir: "out",
+      prefixTitles: false,
+      cleanStreamFilter: "clean-only",
+    }]);
   });
 
   it("returns failure exit code and prints resolver errors", async () => {

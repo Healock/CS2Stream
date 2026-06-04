@@ -1,4 +1,5 @@
 import type { ResolvedRoom } from "../types.js";
+import { formatPlatformRoomLabel } from "../platform-labels.js";
 
 export interface DplOptions {
   prefixTitles?: boolean;
@@ -11,7 +12,7 @@ export function buildDpl(eventTitle: string, rooms: ResolvedRoom[], options: Dpl
 
   playableRooms.forEach((room, index) => {
     const item = index + 1;
-    const label = normalizePlaylistField(room.label);
+    const label = normalizePlaylistField(formatPlatformRoomLabel(room.platform, room.label));
     const title = options.prefixTitles ? `[${normalizedEventTitle}] ${label}` : label;
     lines.push(`${item}*file*${normalizePlaylistField(room.stream?.url ?? "")}`);
     lines.push(`${item}*title*${title}`);

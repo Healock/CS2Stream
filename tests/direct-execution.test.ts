@@ -10,11 +10,11 @@ describe("direct execution detection", () => {
 
   test("matches linked npm bin execution when argv path resolves to module path", () => {
     expect(isDirectExecutionPath(
-      "C:\\Users\\Administrator\\AppData\\Roaming\\npm\\node_modules\\douyu-cs2-potplayer\\dist\\tui.js",
+      "C:\\Users\\Administrator\\AppData\\Roaming\\npm\\node_modules\\cs2stream\\dist\\tui.js",
       "file:///D:/Backup/Documents/PotPlayer%20Plugin/dist/tui.js",
       {
-        realpath: (path) => path.startsWith("C:\\Users\\Administrator\\AppData\\Roaming\\npm\\node_modules\\douyu-cs2-potplayer")
-          ? path.replace("C:\\Users\\Administrator\\AppData\\Roaming\\npm\\node_modules\\douyu-cs2-potplayer", "D:\\Backup\\Documents\\PotPlayer Plugin")
+        realpath: (path) => path.startsWith("C:\\Users\\Administrator\\AppData\\Roaming\\npm\\node_modules\\cs2stream")
+          ? path.replace("C:\\Users\\Administrator\\AppData\\Roaming\\npm\\node_modules\\cs2stream", "D:\\Backup\\Documents\\PotPlayer Plugin")
           : path,
       }
     )).toBe(true);

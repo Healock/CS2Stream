@@ -1,6 +1,10 @@
 node_modules/
 dist/
 out/
+out-live*/
+out-*/
+.npm-cache/
+*.tgz
 
 npm-debug.log*
 yarn-debug.log*

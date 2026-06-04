@@ -1,13 +1,23 @@
-import type { ResolverResult } from "../types.js";
+import { visibleWidth } from "@earendil-works/pi-tui";
+import { DEFAULT_BILIBILI_ANCHOR } from "../config.js";
+import { formatPlatformRoomLabel } from "../platform-labels.js";
+import {
+  PLATFORM_NAMES,
+  PLATFORM_ORDER,
+  createDefaultPlatformAnchors,
+  createDefaultPlatformSelection,
+  getSelectedPlatformNames,
+  type PlatformAnchors,
+  type PlatformCookieHeaders,
+  type PlatformSelection,
+} from "../platform-config.js";
+import type { PlatformId, ResolverResult } from "../types.js";
 
 export type MenuAction =
   | "resolve-and-open"
   | "resolve-only"
   | "show-last-result"
-  | "set-potplayer-path"
-  | "set-anchor"
-  | "set-output-dir"
-  | "auth-settings"
+  | "settings"
   | "platform-settings"
   | "set-language"
   | "exit"
@@ -15,69 +25,107 @@ export type MenuAction =
 
 export type TuiLanguage = "en" | "zh";
 export type CleanStreamFilter = "clean-only" | "all";
+export type SettingsAction =
+  | "set-output-dir"
+  | "toggle-clean-stream-filter"
+  | "set-potplayer-path"
+  | "auth-settings"
+  | "back"
+  | "invalid";
+export type PlatformSettingsAction =
+  | "toggle-douyu"
+  | "toggle-huya"
+  | "toggle-bilibili"
+  | "edit-douyu"
+  | "edit-huya"
+  | "edit-bilibili"
+  | "back"
+  | "invalid";
 
 export interface TuiState {
-  anchor: string;
   outputDir: string;
   language: TuiLanguage;
   cleanStreamFilter: CleanStreamFilter;
+  platformSelection: PlatformSelection;
+  platformAnchors: PlatformAnchors;
+  platformCookieHeaders: PlatformCookieHeaders;
   potPlayerPath?: string;
   lastResult?: ResolverResult;
+  statusMessage?: string;
 }
 
 export function createInitialTuiState(): TuiState {
   return {
-    anchor: "https://www.douyu.com/601514",
     outputDir: "out",
     language: "en",
     cleanStreamFilter: "clean-only",
+    platformSelection: createDefaultPlatformSelection(),
+    platformAnchors: createDefaultPlatformAnchors(),
+    platformCookieHeaders: {},
   };
 }
 
 export function renderMainMenu(state: TuiState): string {
-  if (state.language === "zh") {
-    return [
-      "",
-      "CS2 直播助手",
-      "",
-      `入口: ${state.anchor}`,
-      `输出目录: ${state.outputDir}`,
-      `PotPlayer: ${state.potPlayerPath || "自动"}`,
-      "",
-      "1. 获取斗鱼 CS2 赛事并打开 PotPlayer",
-      "2. 只生成 PotPlayer 播放列表",
-      "3. 查看上一次结果",
-      "4. 设置 PotPlayer 路径",
-      "5. 设置斗鱼入口",
-      "6. 设置输出目录",
-      "7. 账号验证设置",
-      "8. 其他平台设置",
-      "9. 语言",
-      "0. 退出",
-      "",
-    ].join("\n");
-  }
+  const lines = state.language === "zh"
+    ? [
+        "",
+        "CS2 直播助手",
+        "",
+        ...renderStatusBox(state),
+        "",
+        "1. 获取 CS2 赛事流并打开 PotPlayer",
+        "2. 只生成 PotPlayer 播放列表",
+        "3. 查看上一次结果",
+        "4. 设置",
+        "5. 平台设置",
+        "9. 语言",
+        "0. 退出",
+        "",
+      ]
+    : [
+        "",
+        "CS2 Stream Assistant",
+        "",
+        ...renderStatusBox(state),
+        "",
+        "1. Resolve CS2 streams and open in PotPlayer",
+        "2. Resolve CS2 streams and only generate playlist",
+        "3. Show last result",
+        "4. Settings",
+        "5. Platform settings",
+        "9. Language",
+        "0. Exit",
+        "",
+      ];
 
-  return [
-    "",
-    "CS2 Stream Assistant",
-    "",
-    `Anchor: ${state.anchor}`,
-    `Output: ${state.outputDir}`,
-    `PotPlayer: ${state.potPlayerPath || "auto"}`,
-    "",
-    "1. Resolve Douyu CS2 and open in PotPlayer",
-    "2. Resolve Douyu CS2 and only generate playlist",
-    "3. Show last result",
-    "4. Set PotPlayer path",
-    "5. Set Douyu anchor",
-    "6. Set output directory",
-    "7. Account authentication settings",
-    "8. Other platform settings",
-    "9. Language",
-    "0. Exit",
-    "",
-  ].join("\n");
+  return lines.join("\n");
+}
+
+export function renderStatusBox(state: TuiState): string[] {
+  const language = state.language;
+  const rows = language === "zh"
+    ? [
+        `平台: ${getSelectedPlatformNames(state.platformSelection, language)}`,
+        `输出目录: ${state.outputDir}`,
+        `PotPlayer: ${state.potPlayerPath || "自动"}`,
+        `纯净流策略: ${renderCleanStreamFilterLabel(state.cleanStreamFilter, language)}`,
+      ]
+    : [
+        `Platforms: ${getSelectedPlatformNames(state.platformSelection, language)}`,
+        `Output: ${state.outputDir}`,
+        `PotPlayer: ${state.potPlayerPath || "auto"}`,
+        `Clean stream filter: ${renderCleanStreamFilterLabel(state.cleanStreamFilter, language)}`,
+  ];
+  const title = "CS2Stream";
+  const titleContent = ` ${title} `;
+  const innerWidth = Math.max(visibleWidth(titleContent), ...rows.map((row) => visibleWidth(` ${row} `)));
+  const top = `┌${titleContent}${"─".repeat(Math.max(0, innerWidth - visibleWidth(titleContent)))}┐`;
+  const body = rows.map((row) => {
+    const content = ` ${row} `;
+    return `│${content}${" ".repeat(Math.max(0, innerWidth - visibleWidth(content)))}│`;
+  });
+  const bottom = `└${"─".repeat(innerWidth)}┘`;
+  return [top, ...body, bottom];
 }
 
 export function parseMenuAction(input: string): MenuAction {
@@ -89,14 +137,8 @@ export function parseMenuAction(input: string): MenuAction {
     case "3":
       return "show-last-result";
     case "4":
-      return "set-potplayer-path";
+      return "settings";
     case "5":
-      return "set-anchor";
-    case "6":
-      return "set-output-dir";
-    case "7":
-      return "auth-settings";
-    case "8":
       return "platform-settings";
     case "9":
       return "set-language";
@@ -105,6 +147,154 @@ export function parseMenuAction(input: string): MenuAction {
     default:
       return "invalid";
   }
+}
+
+export function renderSettingsMenu(state: TuiState): string {
+  if (state.language === "zh") {
+    return [
+      "",
+      "设置",
+      "",
+      "1. 设置输出目录",
+      `2. 纯净流策略: ${renderCleanStreamFilterLabel(state.cleanStreamFilter, state.language)}`,
+      "3. 设置 PotPlayer 路径",
+      "4. 账号验证设置",
+      "0. 返回",
+      "",
+    ].join("\n");
+  }
+
+  return [
+    "",
+    "Settings",
+    "",
+    "1. Set output directory",
+    `2. Clean stream filter: ${renderCleanStreamFilterLabel(state.cleanStreamFilter, state.language)}`,
+    "3. Set PotPlayer path",
+    "4. Account authentication settings",
+    "0. Back",
+    "",
+  ].join("\n");
+}
+
+export function parseSettingsAction(input: string): SettingsAction {
+  switch (input.trim()) {
+    case "1":
+      return "set-output-dir";
+    case "2":
+      return "toggle-clean-stream-filter";
+    case "3":
+      return "set-potplayer-path";
+    case "4":
+      return "auth-settings";
+    case "0":
+      return "back";
+    default:
+      return "invalid";
+  }
+}
+
+export function renderPlatformSettingsMenu(state: TuiState): string {
+  const language = state.language;
+  if (language === "zh") {
+    return [
+      "",
+      "平台设置",
+      "",
+      ...PLATFORM_ORDER.map((platform, index) => `${index + 1}. [${state.platformSelection[platform] ? "x" : " "}] ${PLATFORM_NAMES[platform].zh}`),
+      `4. 编辑斗鱼入口: ${state.platformAnchors.douyu.join(", ")}`,
+      `5. 编辑虎牙入口: ${state.platformAnchors.huya.join(", ")}`,
+      `6. 编辑 Bilibili 入口: ${state.platformAnchors.bilibili.join(", ")}`,
+      "0. 返回",
+      "",
+    ].join("\n");
+  }
+
+  return [
+    "",
+    "Platform settings",
+    "",
+    ...PLATFORM_ORDER.map((platform, index) => `${index + 1}. [${state.platformSelection[platform] ? "x" : " "}] ${PLATFORM_NAMES[platform].en}`),
+    `4. Edit Douyu entries: ${state.platformAnchors.douyu.join(", ")}`,
+    `5. Edit Huya entries: ${state.platformAnchors.huya.join(", ")}`,
+    `6. Edit Bilibili entries: ${state.platformAnchors.bilibili.join(", ")}`,
+    "0. Back",
+    "",
+  ].join("\n");
+}
+
+export function parsePlatformSettingsAction(input: string): PlatformSettingsAction {
+  switch (input.trim()) {
+    case "1":
+      return "toggle-douyu";
+    case "2":
+      return "toggle-huya";
+    case "3":
+      return "toggle-bilibili";
+    case "4":
+      return "edit-douyu";
+    case "5":
+      return "edit-huya";
+    case "6":
+      return "edit-bilibili";
+    case "0":
+      return "back";
+    default:
+      return "invalid";
+  }
+}
+
+export function platformFromToggleAction(action: PlatformSettingsAction): PlatformId | undefined {
+  if (action === "toggle-douyu") return "douyu";
+  if (action === "toggle-huya") return "huya";
+  if (action === "toggle-bilibili") return "bilibili";
+  return undefined;
+}
+
+export function platformFromEditAction(action: PlatformSettingsAction): PlatformId | undefined {
+  if (action === "edit-douyu") return "douyu";
+  if (action === "edit-huya") return "huya";
+  if (action === "edit-bilibili") return "bilibili";
+  return undefined;
+}
+
+export function renderCleanStreamFilterLabel(filter: CleanStreamFilter, language: TuiLanguage): string {
+  if (language === "zh") {
+    return filter === "clean-only" ? "仅纯净流" : "全部房间";
+  }
+
+  return filter === "clean-only" ? "clean-only" : "all rooms";
+}
+
+export function renderCleanStreamFilterChangedMessage(filter: CleanStreamFilter, language: TuiLanguage): string {
+  if (language === "zh") {
+    return `纯净流策略已切换为: ${renderCleanStreamFilterLabel(filter, language)}。`;
+  }
+
+  return `Clean stream filter switched to: ${renderCleanStreamFilterLabel(filter, language)}.`;
+}
+
+export function renderPlatformToggleMessage(platform: PlatformId, enabled: boolean, language: TuiLanguage): string {
+  const name = PLATFORM_NAMES[platform][language];
+  if (language === "zh") {
+    return `${name} 已${enabled ? "启用" : "禁用"}。`;
+  }
+
+  return `${name} ${enabled ? "enabled" : "disabled"}.`;
+}
+
+export function renderPlatformCookieCapturedMessage(platform: PlatformId, language: TuiLanguage): string {
+  const name = PLATFORM_NAMES[platform][language];
+  return language === "zh" ? `${name} 浏览器 Cookie 已获取。` : `${name} browser cookies captured.`;
+}
+
+export function renderBrowserAuthFailedMessage(error: unknown, language: TuiLanguage): string {
+  const message = error instanceof Error ? error.message : String(error);
+  if (language === "zh") {
+    return `浏览器登录失败: ${message}\n请安装 Playwright 浏览器: npx playwright install，或设置 CS2STREAM_BROWSER_PATH 指向 Chrome/Edge。`;
+  }
+
+  return `Browser login failed: ${message}\nInstall Playwright browsers with npx playwright install, or set CS2STREAM_BROWSER_PATH to Chrome/Edge.`;
 }
 
 export function parseLanguageSelection(input: string): TuiLanguage | undefined {
@@ -147,11 +337,38 @@ export function renderNoPreviousResultMessage(language: TuiLanguage): string {
 }
 
 export function renderResolvingMessage(language: TuiLanguage): string {
-  return language === "zh" ? "正在解析斗鱼 CS2 房间...\n" : "Resolving Douyu CS2 rooms...\n";
+  return language === "zh" ? "正在解析 CS2 赛事流...\n" : "Resolving CS2 streams...\n";
 }
 
 export function renderSelectOptionPrompt(language: TuiLanguage): string {
   return language === "zh" ? "请选择: " : "Select option: ";
+}
+
+export function renderAuthPlatformPrompt(language: TuiLanguage): string {
+  if (language === "zh") {
+    return `选择要登录的平台: 1. Bilibili  2. 斗鱼  3. 虎牙  0. 返回\n平台: `;
+  }
+
+  return `Select platform login: 1. Bilibili  2. Douyu  3. Huya  0. Back\nPlatform: `;
+}
+
+export function parseAuthPlatformSelection(input: string): PlatformId | "back" | undefined {
+  switch (input.trim().toLowerCase()) {
+    case "1":
+    case "bilibili":
+    case "bili":
+      return "bilibili";
+    case "2":
+    case "douyu":
+      return "douyu";
+    case "3":
+    case "huya":
+      return "huya";
+    case "0":
+      return "back";
+    default:
+      return undefined;
+  }
 }
 
 export function renderResultSummary(result: ResolverResult, language: TuiLanguage = "en"): string {
@@ -181,7 +398,7 @@ export function renderResultSummary(result: ResolverResult, language: TuiLanguag
     if (failedRooms.length > 0) {
       lines.push("失败房间:");
       for (const room of failedRooms) {
-        lines.push(`- ${room.label}: ${room.error?.message ?? "未知错误"}`);
+        lines.push(`- ${formatPlatformRoomLabel(room.platform, room.label)}: ${room.error?.message ?? "未知错误"}`);
       }
     }
 
@@ -218,7 +435,7 @@ export function renderResultSummary(result: ResolverResult, language: TuiLanguag
   if (failedRooms.length > 0) {
     lines.push("Failed rooms:");
     for (const room of failedRooms) {
-      lines.push(`- ${room.label}: ${room.error?.message ?? "unknown error"}`);
+      lines.push(`- ${formatPlatformRoomLabel(room.platform, room.label)}: ${room.error?.message ?? "unknown error"}`);
     }
   }
 
@@ -235,15 +452,15 @@ export function renderResultSummary(result: ResolverResult, language: TuiLanguag
 export function renderPlaceholderMessage(action: "auth-settings" | "platform-settings", language: TuiLanguage = "en"): string {
   if (language === "zh") {
     if (action === "auth-settings") {
-      return "账号验证设置将在后续版本开放。";
+      return `账号验证会打开浏览器登录页。Bilibili 默认入口: ${DEFAULT_BILIBILI_ANCHOR}`;
     }
 
-    return "虎牙和 Bilibili 支持将在后续版本开放。";
+    return "平台设置可选择启用的平台，并配置各平台入口。";
   }
 
   if (action === "auth-settings") {
-    return "Account authentication settings are reserved for a later version.";
+    return `Account authentication opens a browser login page. Bilibili default entry: ${DEFAULT_BILIBILI_ANCHOR}`;
   }
 
-  return "Huya and Bilibili support is reserved for a later version.";
+  return "Platform settings let you choose enabled platforms and configure platform entries.";
 }

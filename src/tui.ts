@@ -1,14 +1,26 @@
 #!/usr/bin/env node
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
+import { ProcessTerminal, TUI } from "@earendil-works/pi-tui";
 import { isDirectExecutionPath } from "./direct-execution.js";
+import { createPiTuiApp } from "./pi-tui-app.js";
+import { capturePlatformBrowserCookies } from "./browser-auth.js";
 import { openPlaylistInPotPlayer, type OpenPlaylistResult } from "./potplayer.js";
+import { getSelectedPlatformAnchors, parseAnchorList } from "./platform-config.js";
 import { runResolver, type RunResolverOptions } from "./resolver.js";
 import { LineQuestionQueue } from "./tui/line-queue.js";
 import {
   createInitialTuiState,
+  parseAuthPlatformSelection,
   parseLanguageSelection,
   parseMenuAction,
+  parsePlatformSettingsAction,
+  parseSettingsAction,
+  platformFromEditAction,
+  platformFromToggleAction,
+  renderCleanStreamFilterChangedMessage,
+  renderAuthPlatformPrompt,
+  renderBrowserAuthFailedMessage,
   renderInvalidLanguageMessage,
   renderInvalidOptionMessage,
   renderLanguageChangedMessage,
@@ -16,38 +28,47 @@ import {
   renderMainMenu,
   renderNoPreviousResultMessage,
   renderPlaceholderMessage,
+  renderPlatformCookieCapturedMessage,
+  renderPlatformSettingsMenu,
+  renderPlatformToggleMessage,
   renderResolvingMessage,
   renderResultSummary,
   renderSelectOptionPrompt,
+  renderSettingsMenu,
   type TuiState,
 } from "./tui/menu.js";
 import type { ResolverResult } from "./types.js";
+import type { PlatformId } from "./types.js";
 
 export interface TuiIo {
   write(chunk: string): void;
   question(prompt: string): Promise<string | undefined>;
+  clear?(): void;
   close(): void;
 }
 
 export type TuiResolveFn = (options: RunResolverOptions) => Promise<ResolverResult>;
 export type TuiOpenPlaylistFn = (playlistPath: string, options: { explicitPath?: string }) => OpenPlaylistResult;
+export type CaptureBrowserCookiesFn = (platform: PlatformId) => Promise<string>;
 
 export interface RunTuiOptions {
   io?: TuiIo;
   resolve?: TuiResolveFn;
   openPlaylist?: TuiOpenPlaylistFn;
+  captureBrowserCookies?: CaptureBrowserCookiesFn;
 }
 
 export async function runTui(options: RunTuiOptions = {}): Promise<number> {
   const io = options.io ?? createDefaultIo();
   const resolve = options.resolve ?? runResolver;
   const openPlaylist = options.openPlaylist ?? openPlaylistInPotPlayer;
+  const captureBrowserCookies = options.captureBrowserCookies ?? capturePlatformBrowserCookies;
   const state = createInitialTuiState();
 
   try {
     let shouldExit = false;
     while (!shouldExit) {
-      io.write(renderMainMenu(state));
+      renderMainScreen(state, io);
       const choice = await askQuestion(io, renderSelectOptionPrompt(state.language));
       if (choice === undefined) {
         break;
@@ -61,22 +82,13 @@ export async function runTui(options: RunTuiOptions = {}): Promise<number> {
           await resolveAndMaybeOpen(state, io, resolve, openPlaylist, false);
           break;
         case "show-last-result":
-          io.write(state.lastResult ? `${renderResultSummary(state.lastResult, state.language)}\n` : `${renderNoPreviousResultMessage(state.language)}\n`);
+          state.statusMessage = state.lastResult ? renderResultSummary(state.lastResult, state.language) : renderNoPreviousResultMessage(state.language);
           break;
-        case "set-potplayer-path":
-          state.potPlayerPath = await promptOptionalValue(io, "PotPlayer executable path: ");
-          break;
-        case "set-anchor":
-          state.anchor = await promptRequiredValue(io, "Douyu anchor URL or room ID: ", state.anchor);
-          break;
-        case "set-output-dir":
-          state.outputDir = await promptRequiredValue(io, "Output directory: ", state.outputDir);
-          break;
-        case "auth-settings":
-          io.write(`${renderPlaceholderMessage("auth-settings", state.language)}\n`);
+        case "settings":
+          await openSettingsMenu(state, io, captureBrowserCookies);
           break;
         case "platform-settings":
-          io.write(`${renderPlaceholderMessage("platform-settings", state.language)}\n`);
+          await openPlatformSettingsMenu(state, io);
           break;
         case "set-language":
           await setLanguage(state, io);
@@ -85,7 +97,7 @@ export async function runTui(options: RunTuiOptions = {}): Promise<number> {
           shouldExit = true;
           break;
         case "invalid":
-          io.write(`${renderInvalidOptionMessage(state.language)}\n`);
+          state.statusMessage = renderInvalidOptionMessage(state.language);
           break;
       }
     }
@@ -93,6 +105,102 @@ export async function runTui(options: RunTuiOptions = {}): Promise<number> {
     return 0;
   } finally {
     io.close();
+  }
+}
+
+async function openSettingsMenu(state: TuiState, io: TuiIo, captureBrowserCookies: CaptureBrowserCookiesFn): Promise<void> {
+  let shouldReturn = false;
+  while (!shouldReturn) {
+    renderSettingsScreen(state, io);
+    const choice = await askQuestion(io, renderSelectOptionPrompt(state.language));
+    if (choice === undefined) {
+      return;
+    }
+
+    switch (parseSettingsAction(choice)) {
+      case "set-output-dir":
+        state.outputDir = await promptRequiredValue(io, "Output directory: ", state.outputDir);
+        break;
+      case "toggle-clean-stream-filter":
+        state.cleanStreamFilter = state.cleanStreamFilter === "clean-only" ? "all" : "clean-only";
+        state.statusMessage = renderCleanStreamFilterChangedMessage(state.cleanStreamFilter, state.language);
+        break;
+      case "set-potplayer-path":
+        state.potPlayerPath = await promptOptionalValue(io, "PotPlayer executable path: ");
+        break;
+      case "auth-settings":
+        await captureAuthCookies(state, io, captureBrowserCookies);
+        break;
+      case "back":
+        shouldReturn = true;
+        break;
+      case "invalid":
+        state.statusMessage = renderInvalidOptionMessage(state.language);
+        break;
+    }
+  }
+}
+
+async function openPlatformSettingsMenu(state: TuiState, io: TuiIo): Promise<void> {
+  let shouldReturn = false;
+  while (!shouldReturn) {
+    renderPlatformSettingsScreen(state, io);
+    const choice = await askQuestion(io, renderSelectOptionPrompt(state.language));
+    if (choice === undefined) {
+      return;
+    }
+
+    const action = parsePlatformSettingsAction(choice);
+    const togglePlatform = platformFromToggleAction(action);
+    if (togglePlatform) {
+      state.platformSelection[togglePlatform] = !state.platformSelection[togglePlatform];
+      state.statusMessage = renderPlatformToggleMessage(togglePlatform, state.platformSelection[togglePlatform], state.language);
+      continue;
+    }
+
+    const editPlatform = platformFromEditAction(action);
+    if (editPlatform) {
+      const current = state.platformAnchors[editPlatform].join(", ");
+      const value = await promptRequiredValue(io, "Entry URL(s), comma separated: ", current);
+      const anchors = parseAnchorList(value);
+      if (anchors.length > 0) {
+        state.platformAnchors[editPlatform] = anchors;
+      }
+      continue;
+    }
+
+    switch (action) {
+      case "back":
+        shouldReturn = true;
+        break;
+      case "invalid":
+        state.statusMessage = renderInvalidOptionMessage(state.language);
+        break;
+    }
+  }
+}
+
+function renderMainScreen(state: TuiState, io: TuiIo): void {
+  io.clear?.();
+  io.write(renderMainMenu(state));
+  writeStatusMessage(state, io);
+}
+
+function renderSettingsScreen(state: TuiState, io: TuiIo): void {
+  io.clear?.();
+  io.write(renderSettingsMenu(state));
+  writeStatusMessage(state, io);
+}
+
+function renderPlatformSettingsScreen(state: TuiState, io: TuiIo): void {
+  io.clear?.();
+  io.write(renderPlatformSettingsMenu(state));
+  writeStatusMessage(state, io);
+}
+
+function writeStatusMessage(state: TuiState, io: TuiIo): void {
+  if (state.statusMessage) {
+    io.write(`${state.statusMessage}\n\n`);
   }
 }
 
@@ -117,12 +225,39 @@ async function setLanguage(state: TuiState, io: TuiIo): Promise<void> {
   const language = parseLanguageSelection(input);
 
   if (!language) {
-    io.write(`${renderInvalidLanguageMessage(state.language)}\n`);
+    state.statusMessage = renderInvalidLanguageMessage(state.language);
     return;
   }
 
   state.language = language;
-  io.write(`${renderLanguageChangedMessage(state.language)}\n`);
+  state.statusMessage = renderLanguageChangedMessage(state.language);
+}
+
+async function captureAuthCookies(
+  state: TuiState,
+  io: TuiIo,
+  captureBrowserCookies: CaptureBrowserCookiesFn
+): Promise<void> {
+  const input = await askQuestion(io, renderAuthPlatformPrompt(state.language));
+  if (input === undefined) {
+    return;
+  }
+
+  const platform = parseAuthPlatformSelection(input);
+  if (!platform || platform === "back") {
+    if (!platform) {
+      state.statusMessage = renderInvalidOptionMessage(state.language);
+    }
+    return;
+  }
+
+  try {
+    const cookieHeader = await captureBrowserCookies(platform);
+    state.platformCookieHeaders[platform] = cookieHeader;
+    state.statusMessage = renderPlatformCookieCapturedMessage(platform, state.language);
+  } catch (error) {
+    state.statusMessage = renderBrowserAuthFailedMessage(error, state.language);
+  }
 }
 
 async function resolveAndMaybeOpen(
@@ -134,12 +269,13 @@ async function resolveAndMaybeOpen(
 ): Promise<void> {
   io.write(renderResolvingMessage(state.language));
   const result = await resolve({
-    anchor: state.anchor,
+    anchors: getSelectedPlatformAnchors(state.platformSelection, state.platformAnchors),
     outputDir: state.outputDir,
     cleanStreamFilter: state.cleanStreamFilter,
+    ...(Object.keys(state.platformCookieHeaders).length > 0 ? { platformCookieHeaders: state.platformCookieHeaders } : {}),
   });
   state.lastResult = result;
-  io.write(`${renderResultSummary(result, state.language)}\n`);
+  state.statusMessage = renderResultSummary(result, state.language);
 
   if (!shouldOpen || !result.ok || !result.playlistPath) {
     return;
@@ -147,12 +283,11 @@ async function resolveAndMaybeOpen(
 
   const launchResult = openPlaylist(result.playlistPath, { explicitPath: state.potPlayerPath });
   if (launchResult.ok && launchResult.mode === "potplayer") {
-    io.write(`Opened in PotPlayer: ${launchResult.executablePath}\n`);
+    state.statusMessage = `${state.statusMessage}\nOpened in PotPlayer: ${launchResult.executablePath}`;
   } else if (launchResult.ok) {
-    io.write("Opened playlist using Windows file association.\n");
+    state.statusMessage = `${state.statusMessage}\nOpened playlist using Windows file association.`;
   } else {
-    io.write(`Could not open playlist automatically: ${launchResult.error}\n`);
-    io.write(`Playlist remains available at: ${result.playlistPath}\n`);
+    state.statusMessage = `${state.statusMessage}\nCould not open playlist automatically: ${launchResult.error}\nPlaylist remains available at: ${result.playlistPath}`;
   }
 }
 
@@ -190,6 +325,11 @@ function createDefaultIo(): TuiIo {
     write(chunk) {
       output.write(chunk);
     },
+    clear() {
+      if (input.isTTY && output.isTTY) {
+        output.write("\x1b[2J\x1b[H");
+      }
+    },
     async question(prompt) {
       output.write(prompt);
       return await queue.question();
@@ -212,5 +352,14 @@ function isDirectExecution(): boolean {
 }
 
 if (isDirectExecution()) {
-  process.exitCode = await runTui();
+  if (input.isTTY && output.isTTY) {
+    const terminal = new ProcessTerminal();
+    const tui = new TUI(terminal);
+    const app = createPiTuiApp({ exit: () => tui.stop(), requestRender: () => tui.requestRender(true) });
+    tui.addChild(app);
+    tui.setFocus(app);
+    tui.start();
+  } else {
+    process.exitCode = await runTui();
+  }
 }

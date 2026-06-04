@@ -41,7 +41,11 @@ export function createDouyuAdapter(deps: DouyuAdapterDeps = {}): PlatformAdapter
         return rooms;
       }
 
-      return parseDouyuSwitchRooms(await renderHtml(normalizedAnchor, context));
+      try {
+        return parseDouyuSwitchRooms(await renderHtml(normalizedAnchor, context));
+      } catch {
+        return [];
+      }
     },
     resolveStream,
   };

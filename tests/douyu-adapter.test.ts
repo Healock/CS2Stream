@@ -86,4 +86,15 @@ describe("Douyu adapter", () => {
     ]);
     expect(renderHtml).toHaveBeenCalledWith("https://www.douyu.com/601514", context);
   });
+
+  it("returns no rooms instead of throwing when rendered switch-room fallback times out", async () => {
+    const fetchedHtml = "<html><head><title>科隆MAJOR_斗鱼CS2赛事</title></head><body></body></html>";
+    const fetchHtml = vi.fn(async () => fetchedHtml);
+    const renderHtml = vi.fn(async () => {
+      throw new Error("page.waitForSelector: Timeout 15000ms exceeded");
+    });
+    const adapter = createDouyuAdapter({ fetchHtml, renderHtml });
+
+    await expect(adapter.discoverEventRooms("https://www.douyu.com/601514", context)).resolves.toEqual([]);
+  });
 });

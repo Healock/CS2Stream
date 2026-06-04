@@ -27,13 +27,14 @@ export async function runCli(argv: string[], io: CliIo, resolve = runResolver): 
         capturedParseError += message;
       },
     })
-    .option("-a, --anchor <url>", "Douyu anchor URL or room ID", "https://www.douyu.com/601514")
+    .option("-a, --anchor <url>", "CS2 stream entry URL; repeat to override the default platform entries", collectAnchor, [])
     .option("-o, --output-dir <path>", "Playlist output directory", "out")
     .option("--prefix-titles", "Prefix playlist item titles with the event title")
     .option("--all-rooms", "Include rooms even when their titles do not contain 纯净流")
-    .action(async (options: { anchor: string; outputDir: string; prefixTitles?: boolean; allRooms?: boolean }) => {
+    .action(async (options: { anchor: string[]; outputDir: string; prefixTitles?: boolean; allRooms?: boolean }) => {
+      const anchors = options.anchor.map((anchor) => anchor.trim()).filter((anchor) => anchor.length > 0);
       const result = await resolve({
-        anchor: options.anchor,
+        ...(anchors.length > 0 ? { anchor: anchors[0], anchors } : {}),
         outputDir: options.outputDir,
         prefixTitles: Boolean(options.prefixTitles),
         cleanStreamFilter: options.allRooms ? "all" : "clean-only",
@@ -76,4 +77,8 @@ function errorMessage(error: unknown): string {
 
 function isHelpError(error: unknown): boolean {
   return typeof error === "object" && error !== null && "code" in error && error.code === "commander.helpDisplayed";
+}
+
+function collectAnchor(value: string, previous: string[]): string[] {
+  return [...previous, value];
 }
